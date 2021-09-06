@@ -241,11 +241,12 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     }
   }
 
+  // no rule1 velocity when no neighbors
+  glm::vec3 rule1_vel(0.0f, 0.0f, 0.0f);
   if (rule1_num_neighbor > 0) {
     pos_center /= rule1_num_neighbor;
+    rule1_vel = (pos_center - pos[iSelf]) * rule1Scale;
   }
-
-  glm::vec3 rule1_vel = (pos_center - pos[iSelf]) * rule1Scale;
 
   // Rule 2: boids try to stay a distance d away from each other
   glm::vec3 rule2_vel(0.0f, 0.0f, 0.0f);
@@ -273,6 +274,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     avg_vel /= rule3_num_neighbor;
   }  
 
+  // BUG: self velocity not substracted
   glm::vec3 rule3_vel = avg_vel * rule3Scale;
 
   return rule1_vel + rule2_vel + rule3_vel;
@@ -290,7 +292,7 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
     return;
   }
 
-  glm::vec3 new_vel = computeVelocityChange(N, index, pos, vel1);
+  glm::vec3 new_vel = vel1[index] + computeVelocityChange(N, index, pos, vel1);
 
   // Clamp the speed
   float speed = glm::length(new_vel);
