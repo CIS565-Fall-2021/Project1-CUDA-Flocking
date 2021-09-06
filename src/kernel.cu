@@ -348,6 +348,20 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
   return x + y * gridResolution + z * gridResolution * gridResolution;
 }
 
+__device__ glm::ivec3 gridIndex3D(const glm::vec3 pos, const glm::vec3 gridMin,
+                                  const float inverseCellWidth) {
+  return static_cast<glm::ivec3>(
+      glm::floor((pos - gridMin) * inverseCellWidth));
+}
+
+__device__ int gridIndex1D(const glm::vec3 pos, const glm::vec3 gridMin,
+                           const float inverseCellWidth,
+                           const int gridResolution) {
+  glm::ivec3 pos_in_grid = gridIndex3D(pos, gridMin, inverseCellWidth);
+  return gridIndex3Dto1D(pos_in_grid.x, pos_in_grid.y, pos_in_grid.z,
+                         gridResolution);
+}
+
 __global__ void kernComputeIndices(int N, int gridResolution, glm::vec3 gridMin,
                                    float inverseCellWidth, const glm::vec3 *pos,
                                    int *indices, int *gridIndices) {
@@ -356,11 +370,9 @@ __global__ void kernComputeIndices(int N, int gridResolution, glm::vec3 gridMin,
 
   if (idx < N) {
     // - Label each boid with the index of its grid cell.
-    const glm::vec3 boid_pos    = pos[idx];
-    glm::ivec3 boid_pos_in_grid = static_cast<glm::ivec3>(
-        glm::floor((boid_pos - gridMin) * inverseCellWidth));
-    int boid_gridIdx = gridIndex3Dto1D(boid_pos_in_grid.x, boid_pos_in_grid.y,
-                                       boid_pos_in_grid.z, gridResolution);
+    const glm::vec3 boid_pos = pos[idx];
+    int boid_gridIdx =
+        gridIndex1D(boid_pos, gridMin, inverseCellWidth, gridResolution);
     gridIndices[idx] = boid_gridIdx;
     // - Set up a parallel array of integer indices as pointers to the actual
     //   boid data in pos and vel1/vel2
