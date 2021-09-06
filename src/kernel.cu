@@ -293,8 +293,9 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf,
  * For each of the `N` bodies, update its position based on its current
  * velocity.
  */
-__global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
-                                             glm::vec3 *vel1, glm::vec3 *vel2) {
+__global__ void kernUpdateVelocityBruteForce(int N, const glm::vec3 *pos,
+                                             const glm::vec3 *vel1,
+                                             glm::vec3 *vel2) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
   if (idx < N) {
@@ -315,7 +316,8 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
  * For each of the `N` bodies, update its position based on its current
  * velocity.
  */
-__global__ void kernUpdatePos(int N, float dt, glm::vec3 *pos, glm::vec3 *vel) {
+__global__ void kernUpdatePos(int N, float dt, glm::vec3 *pos,
+                              const glm::vec3 *vel) {
   // Update position by velocity
   int index = threadIdx.x + (blockIdx.x * blockDim.x);
   if (index >= N) {
