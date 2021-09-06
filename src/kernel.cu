@@ -468,6 +468,7 @@ void Boids::endSimulation() {
 
 void Boids::unitTest() {
   // LOOK-1.2 Feel free to write additional tests here.
+  std::cout << "---- Begins Thrust Unit Test -----\n";
 
   // test unstable sort
   int *dev_intKeys;
