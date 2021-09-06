@@ -349,15 +349,15 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
 }
 
 __global__ void kernComputeIndices(int N, int gridResolution, glm::vec3 gridMin,
-                                   float inverseCellWidth, glm::vec3 *pos,
+                                   float inverseCellWidth, const glm::vec3 *pos,
                                    int *indices, int *gridIndices) {
   // Part 2.1
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < N) {
     // - Label each boid with the index of its grid cell.
-    const glm::vec3 boid_pos   = pos[idx];
-    glm::vec3 boid_pos_in_grid = static_cast<glm::ivec3>(
+    const glm::vec3 boid_pos    = pos[idx];
+    glm::ivec3 boid_pos_in_grid = static_cast<glm::ivec3>(
         glm::floor((boid_pos - gridMin) * inverseCellWidth));
     int boid_gridIdx = gridIndex3Dto1D(boid_pos_in_grid.x, boid_pos_in_grid.y,
                                        boid_pos_in_grid.z, gridResolution);
