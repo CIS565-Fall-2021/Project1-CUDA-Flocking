@@ -351,7 +351,7 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
 __global__ void kernComputeIndices(int N, int gridResolution, glm::vec3 gridMin,
                                    float inverseCellWidth, glm::vec3 *pos,
                                    int *indices, int *gridIndices) {
-  // 2.1
+  // Part 2.1
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < N) {
@@ -377,13 +377,29 @@ __global__ void kernResetIntBuffer(int N, int *intBuffer, int value) {
   }
 }
 
-__global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
+// Assumes particleGridIndices has been sorted
+__global__ void kernIdentifyCellStartEnd(int N, const int *particleGridIndices,
                                          int *gridCellStartIndices,
                                          int *gridCellEndIndices) {
-  // TODO-2.1
+  // Part 2.1
   // Identify the start point of each cell in the gridIndices array.
   // This is basically a parallel unrolling of a loop that goes
   // "this index doesn't match the one before it, must be a new cell!"
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < N) {
+    int particleGridIdx      = particleGridIndices[idx];
+    int prev_particleGridIdx = (idx > 0) ? particleGridIndices[idx - 1] : -1;
+    int next_particleGridIdx =
+        (idx < N - 1) ? particleGridIndices[idx + 1] : -1;
+
+    if (idx == 0 || particleGridIdx != prev_particleGridIdx) {
+      gridCellStartIndices[particleGridIdx] = idx;
+    }
+
+    if (idx == N - 1 || particleGridIdx != next_particleGridIdx) {
+      gridCellEndIndices[particleGridIdx] = idx;
+    }
+  }
 }
 
 __global__ void kernUpdateVelNeighborSearchScattered(
