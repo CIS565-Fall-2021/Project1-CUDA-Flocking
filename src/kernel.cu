@@ -444,9 +444,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
     // - Identify which cells may contain neighbors. This isn't always 8.
     // assume the boid is biased towards the negative direction
-    glm::vec3 neighbors[3] = {glm::vec3(-cellWidth, 0.f, 0.f),
-                              glm::vec3(0.f, -cellWidth, 0.f),
-                              glm::vec3(0.f, 0.f, -cellWidth)};
+    glm::vec3 neighbors[3] = {glm::vec3(-cellWidth / 2, 0.f, 0.f),
+                              glm::vec3(0.f, -cellWidth / 2, 0.f),
+                              glm::vec3(0.f, 0.f, -cellWidth / 2)};
     int dirAlongAxes[3]    = {-1, -1, -1};
     for (int i = 0; i < 3; ++i) {
       glm::vec3 neighbor_pos = boid_pos + neighbors[i];
