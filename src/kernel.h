@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda.h>
+#include <device_launch_parameters.h>
 #include <stdio.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
