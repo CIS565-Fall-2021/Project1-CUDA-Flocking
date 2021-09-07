@@ -506,7 +506,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
       // Rule 2: boids try to stay a distance d away from each other
       glm::vec3 center{0.f, 0.f, 0.f};
-      for (int j = cell_boid_start_idx; j < cell_boid_end_idx; ++j) {
+      for (int j = cell_boid_start_idx; j <= cell_boid_end_idx; ++j) {
         int neighbor_boid_idx = particleArrayIndices[j];
         if (neighbor_boid_idx != idx &&
             glm::distance(pos[neighbor_boid_idx], boid_pos) < rule2Distance) {
@@ -518,7 +518,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
       // Rule 3: boids try to match the speed of surrounding boids
       numInfluencingNeighbors = 0;
       glm::vec3 perceived_vel{0.f, 0.f, 0.f};
-      for (int j = cell_boid_start_idx; j < cell_boid_end_idx; ++j) {
+      for (int j = cell_boid_start_idx; j <= cell_boid_end_idx; ++j) {
         int neighbor_boid_idx = particleArrayIndices[j];
         if (neighbor_boid_idx != idx &&
             glm::distance(pos[neighbor_boid_idx], boid_pos) < rule3Distance) {
@@ -597,7 +597,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   cudaDeviceSynchronize();
 
   kernComputeIndices<<<fullBlocksPerGrid_particles, blockSize>>>(
-      numObjects, gridSideCount, gridMinimum, 1.0 / gridCellWidth, dev_pos,
+      numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos,
       dev_particleArrayIndices, dev_particleGridIndices);
   cudaDeviceSynchronize();
 
@@ -621,7 +621,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   // - Perform velocity updates using neighbor search
   kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid_particles,
                                          blockSize>>>(
-      numObjects, gridSideCount, gridMinimum, 1.0 / gridCellWidth,
+      numObjects, gridSideCount, gridMinimum, gridInverseCellWidth,
       gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices,
       dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
   cudaDeviceSynchronize();
