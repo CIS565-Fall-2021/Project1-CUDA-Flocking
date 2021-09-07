@@ -452,7 +452,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
  */
 void Boids::stepSimulationNaive(float dt) {
   // use the kernels you wrote to step the simulation forward in time.
-  dim3 fullBlocksPerGrid(numObjects + (blockSize - 1) / blockSize);
+  dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
   kernUpdateVelocityBruteForce<<<fullBlocksPerGrid, blockSize>>>(
       numObjects, dev_pos, dev_vel1, dev_vel2);
   kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos,
