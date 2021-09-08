@@ -519,6 +519,11 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
   glm::vec3 new_vel = vel1[this_index] + rule1_vel + rule2_vel + rule3_vel;
 
+  //
+  float3 test_vel = make_float3(new_vel.x, new_vel.y, new_vel.z);
+  float test_x = new_vel.x;
+  //
+
   // Clamp the speed
   float speed = glm::length(new_vel);
   if (speed > maxSpeed) {
@@ -587,13 +592,13 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 
   // init cell start & end array
-  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellStartIndices, NO_BOID);
+  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (gridCellCount, dev_gridCellStartIndices, NO_BOID);
   checkCUDAErrorWithLine("kernResetIntBuffer failed!");
-  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellEndIndices, NO_BOID);
+  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (gridCellCount, dev_gridCellEndIndices, NO_BOID);
   checkCUDAErrorWithLine("kernResetIntBuffer failed!");
 
   // identify cell start & end
-  kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleArrayIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+  kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
   checkCUDAErrorWithLine("kernIdentifyCellStartEnd failed!");
 
   // update velocity
