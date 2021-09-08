@@ -570,14 +570,13 @@ void Boids::stepSimulationNaive(float dt) {
       numObjects, dev_pos, dev_vel1, dev_vel2);
   cudaDeviceSynchronize();
 
-  kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos,
-                                                  dev_vel2);
-  cudaDeviceSynchronize();
-
   // ping-pong the velocity buffers
-  cudaMemcpy(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3),
-             cudaMemcpyDeviceToDevice);
+  std::swap(dev_vel1, dev_vel2);
 
+  // update position
+  kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos,
+                                                  dev_vel1);
+  cudaDeviceSynchronize();
   checkCUDAErrorWithLine("Naive simulation step failed!");
 }
 
@@ -626,15 +625,13 @@ void Boids::stepSimulationScatteredGrid(float dt) {
       dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
   cudaDeviceSynchronize();
 
+  // - Ping-pong buffers as needed
+  std::swap(dev_vel1, dev_vel2);
+
   // - Update positions
   kernUpdatePos<<<fullBlocksPerGrid_particles, blockSize>>>(numObjects, dt,
-                                                            dev_pos, dev_vel2);
+                                                            dev_pos, dev_vel1);
   cudaDeviceSynchronize();
-
-  // - Ping-pong buffers as needed
-  cudaMemcpy(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3),
-             cudaMemcpyDeviceToDevice);
-
   checkCUDAErrorWithLine("Naive simulation step failed!");
 }
 
