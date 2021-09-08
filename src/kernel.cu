@@ -443,6 +443,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
                                        boid_gridPos.z, gridResolution);
 
     // - Identify which cells may contain neighbors. This isn't always 8.
+    // FIXME: use grid pos rounding to determine search directions!
     // assume the boid is biased towards the negative direction
     glm::vec3 neighbors[3] = {glm::vec3(-cellWidth / 2, 0.f, 0.f),
                               glm::vec3(0.f, -cellWidth / 2, 0.f),
