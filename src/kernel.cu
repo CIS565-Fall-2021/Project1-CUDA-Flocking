@@ -447,7 +447,7 @@ void Boids::stepSimulationNaive(float dt) {
                                                                       dev_vel2);
   // Boids update position based on velocity and change in time
     kernUpdatePos <<<fullBlocksPerGrid, blockSize >>> (numObjects, dt,
-                                                       dev_pos, dev_vel2);
+                                                       dev_pos, dev_vel1);
     // TODO-1.2 ping-pong the velocity buffers
     glm::vec3* temp = dev_vel2;
     dev_vel2 = dev_vel1;
