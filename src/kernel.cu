@@ -37,28 +37,18 @@ void checkCUDAError(const char *msg, int line = -1) {
 *****************/
 
 /*! Block size used for CUDA kernel launch. */
-#define blockSize 32 //16 //32 //64 //1024 //512 //256 //128
+#define blockSize PFM_ANA_blockSize
+//#define blockSize 32 //16 //32 //64 //1024 //512 //256 //128
 
 /* Start my own definition */
 // Clamp simply on each component.
-#define clampFunc(dst, min, max) dst = glm::clamp(dst, min, max)
-
-// If true, use rule3 from Conard Parker's note, otherwise follow the instruction.
-#define USE_RULE3_FROM_CONARD_PARKER 0
-
-// If true, use stable sort, otherwise unstable sort.
-#define USE_STABLE_SORT 0 //1
-
-// If true, use half cell width and check 27 cells, otherwise check 8 cells.
-#define USE_HALF_SIZE_OF_CELL 0 //1
-
-// If true, for loop x->y->z, otherwise z->y->x.
-#define FOR_LOOP_XYZ 0 //1
-
-// If true, adjust the search area by cell width.
-#define GRID_LOOPING_OPTIMIZATION 0
+#define clampFunc(dst, min, max) dst = glm::length(dst) <= max ? dst : glm::normalize(dst) * max;
+//#define clampFunc(dst, min, max) dst = glm::clamp(dst, min, max)
 
 #define blockSizePerDim blockSize // 8
+
+__constant__ int dev_gridCellCountPtr[1];
+
 /* End my own definition */
 
 // LOOK-1.2 Parameters for the boids algorithm.
@@ -188,7 +178,7 @@ void Boids::initSimulation(int N) {
   gridCellWidth = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
 #endif // USE_HALF_SIZE_OF_CELL
 #else //GRID_LOOPING_OPTIMIZATION
-  gridCellWidth = std::min(std::min(rule1Distance, rule2Distance), rule3Distance); // Not appropriate?
+  gridCellWidth = GRID_LOOPING_WIDTH;//std::min(std::min(rule1Distance, rule2Distance), rule3Distance); // Not appropriate?
 #endif // GRID_LOOPING_OPTIMIZATION
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
   gridSideCount = 2 * halfSideCount;
@@ -217,7 +207,32 @@ void Boids::initSimulation(int N) {
   cudaMalloc((void**)&dev_vel_reshuffle, N * sizeof(glm::vec3));
   // End implementation 2.3
 
+  cudaMemcpyToSymbol(dev_gridCellCountPtr, &gridCellCount, sizeof(int));
+
   cudaDeviceSynchronize();
+
+#if ENABLE_PROFILE_LOG
+  float idxDiff = std::max(std::max(rule1Distance, rule2Distance), rule3Distance) * gridInverseCellWidth;
+  int sideSearchSize = static_cast<int>(1.25 + idxDiff) - static_cast<int>(1.25 - idxDiff) + 1;
+
+  utilityCore::ProfileLog::get().addKwArg("Boid", numObjects);
+  utilityCore::ProfileLog::get().addKwArg("BkSize", blockSize);
+  utilityCore::ProfileLog::get().addKwArg("Vis", PFM_ANA_VISUALIZE);
+  utilityCore::ProfileLog::get().addKwArg("GCWidth", gridCellWidth);
+  utilityCore::ProfileLog::get().addKwArg("Nei", sideSearchSize * sideSearchSize * sideSearchSize);
+  utilityCore::ProfileLog::get().addKwArg("ShMem", USE_SHARED_MEMORY);
+
+  utilityCore::ProfileLog::get().addArg((PFM_ANA_UNIFORM_GRID > 0 ? (PFM_ANA_COHERENT_GRID > 0 ? "Coherent" : "Scattered") : "Naive"));
+  utilityCore::ProfileLog::get().addArg((USE_STABLE_SORT > 0 ? "SSort" : "USort"));
+  utilityCore::ProfileLog::get().addArg((IDENTIFY_START_END_BY_BINARY_SEARCH > 0 ? "BinSearchGridCell" : "ConstBoids"));
+
+  //float startTime = 1500.f;
+  int startFrame = 512;
+  int accFrameCount = 1024;
+  int frameInterval = 1;
+
+  utilityCore::ProfileLog::get().initProfile(std::string("../profile/") + (PFM_ANA_VISUALIZE > 0 ? "Vis_1/" : "Vis_0/") + "CIS565Proj1", "end", startFrame, accFrameCount, frameInterval, std::ios_base::out);
+#endif ENABLE_PROFILE_LOG
 }
 
 
@@ -442,21 +457,73 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
   // "this index doesn't match the one before it, must be a new cell!"
 
   // Start implementation
-  int indexCell = (blockIdx.x * blockDim.x) + threadIdx.x;
-  // Can we use CPU global variable in CUDA device scpoe?
-  //if (index >= gridCellCount) {
+
+#if !IDENTIFY_START_END_BY_BINARY_SEARCH
+  int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if (index >= N) {
+    return;
+  }
+
+  int prevIdx = imax(0, index - 1);
+  int nextIdx = imin(N - 1, index + 1);
+  
+  int indexCell = particleGridIndices[index];
+  int prevIndexCell = particleGridIndices[prevIdx];
+  int nextIndexCell = particleGridIndices[nextIdx];
+
+  if (index == 0 || indexCell != prevIndexCell) {
+    gridCellStartIndices[indexCell] = index;
+  }
+  if (index == N - 1 || indexCell != nextIndexCell) {
+    gridCellEndIndices[indexCell] = index + 1;
+  }
+
+  //if (indexCell >= dev_gridCellCountPtr[0]) {
   //  return;
   //}
+  //for (int i = 0; i < N; ++i) {
+  //  if (particleGridIndices[i] == indexCell && gridCellStartIndices[indexCell] == -1) {
+  //    gridCellStartIndices[indexCell] = i;
+  //  }
+  //  if (particleGridIndices[i] > indexCell && gridCellStartIndices[indexCell] != -1) {
+  //    gridCellEndIndices[indexCell] = i;
+  //    break;
+  //  }
+  //}
+#else // IDENTIFY_START_END_BY_BINARY_SEARCH
+  int indexCell = (blockIdx.x * blockDim.x) + threadIdx.x;
+  // Can we use CPU global variable in CUDA device scpoe? No?
+  //if (indexCell >= gridCellCount) {
+  //  return;
+  //}
+  if (indexCell >= dev_gridCellCountPtr[0]) {
+    return;
+   }
 
-  for (int i = 0; i < N; ++i) {
-    if (particleGridIndices[i] == indexCell && gridCellStartIndices[indexCell] == -1) {
-      gridCellStartIndices[indexCell] = i;
+  int initLeft = 0, initRight = N - 1;
+  while (initLeft < initRight) {
+    int mid = initLeft + ((initRight - initLeft) >> 1);
+    int midCell = particleGridIndices[mid];
+    if (midCell < indexCell) {
+      initLeft = mid + 1;
     }
-    if (particleGridIndices[i] > indexCell && gridCellStartIndices[indexCell] != -1) {
-      gridCellEndIndices[indexCell] = i;
-      break;
+    else {
+      initRight = mid;
     }
   }
+  if (particleGridIndices[initLeft] != indexCell) {
+    return;
+  }
+  while (initLeft >= 0 && particleGridIndices[initLeft] == indexCell) {
+    --initLeft;
+  }
+  gridCellStartIndices[indexCell] = initLeft + 1;
+  while (initRight < N && particleGridIndices[initRight] == indexCell) {
+    ++initRight;
+  }
+  gridCellEndIndices[indexCell] = initRight;
+#endif // IDENTIFY_START_END_BY_BINARY_SEARCH
+
   // End implementation
 }
 
@@ -480,11 +547,11 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   if (index >= N) {
     return;
   }
-
   int boidIndex = particleArrayIndices[index];
+  glm::vec3 posOfIndex = pos[boidIndex];
 
   // 2.1.1 Identify the cell
-  glm::vec3 posLocal = pos[boidIndex] - gridMin;
+  glm::vec3 posLocal = posOfIndex - gridMin;
   glm::vec3 idxLocal = posLocal * inverseCellWidth;
   //int x = idxLocal.x, y = idxLocal.y, z = idxLocal.z;
   //int indexCell = gridIndex3Dto1D(x, y, z, gridResolution);
@@ -541,7 +608,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
         for (int i = startIndex; i < endIndex; ++i) {
           int bi1 = particleArrayIndices[i];
           
-          glm::vec3 diff = pos[bi1] - pos[boidIndex];
+          glm::vec3 diff = pos[bi1] - posOfIndex;
           float distance = glm::length(diff);
           if (bi1 != boidIndex) {
             // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
@@ -569,7 +636,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
   if (rule1Neighbor > 0) {
     perceivedCenter /= rule1Neighbor;
-    dVel += (perceivedCenter - pos[boidIndex]) * rule1Scale;
+    dVel += (perceivedCenter - posOfIndex) * rule1Scale;
   }
 
   dVel += collisionP * rule2Scale;
@@ -614,9 +681,9 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   if (index >= N) {
     return;
   }
-
+  glm::vec3 posOfIndex = pos[index];
   // 2.3.1 Identify the cell
-  glm::vec3 posLocal = pos[index] - gridMin;
+  glm::vec3 posLocal = posOfIndex - gridMin;
   glm::vec3 idxLocal = posLocal * inverseCellWidth;
   //int x = idxLocal.x, y = idxLocal.y, z = idxLocal.z;
   //int indexCell = gridIndex3Dto1D(x, y, z, gridResolution);
@@ -672,7 +739,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
         // 2.3.4 Acces each boid in the cell and compute velocity change
         for (int i = startIndex; i < endIndex; ++i) {
-          glm::vec3 diff = pos[i] - pos[index];
+          glm::vec3 diff = pos[i] - posOfIndex;
           float distance = glm::length(diff);
           if (i != index) {
             // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
@@ -700,7 +767,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
   if (rule1Neighbor > 0) {
     perceivedCenter /= rule1Neighbor;
-    dVel += (perceivedCenter - pos[index]) * rule1Scale;
+    dVel += (perceivedCenter - posOfIndex) * rule1Scale;
   }
 
   dVel += collisionP * rule2Scale;
@@ -732,11 +799,12 @@ void Boids::stepSimulationNaive(float dt) {
   // Start implementation
   // 1.2.1
   dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-  kernUpdateVelocityBruteForce<<<fullBlocksPerGrid, threadsPerBlock>>>(numObjects, dev_pos, dev_vel1, dev_vel2);
-  kernUpdatePos<<<fullBlocksPerGrid, threadsPerBlock>>>(numObjects, dt, dev_pos, dev_vel2);
+  callCUDA_Profile(kernUpdateVelocityBruteForce)<<<fullBlocksPerGrid, threadsPerBlock>>>(numObjects, dev_pos, dev_vel1, dev_vel2);
+  callCUDA_Profile(kernUpdatePos)<<<fullBlocksPerGrid, threadsPerBlock>>>(numObjects, dt, dev_pos, dev_vel2);
 
   // 1.2.2
-  cudaMemcpy(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  glm::vec3* tmp = dev_vel1; dev_vel1 = dev_vel2; dev_vel2 = tmp;//callCUDA_Profile(cudaMemcpy)(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  callCUDA_ProfileEnd();
   
   // End implementation
 }
@@ -758,37 +826,44 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   // Start implementation
   dim3 fullBlocksPerGridForBoid((numObjects + blockSize - 1) / blockSize);
 
-  dim3 threadsPerBlock1DForCell((gridCellCount + blockSize - 1) / blockSize);
+  dim3 fullBlocksPerGridForCell((gridCellCount + blockSize - 1) / blockSize);
 
-  int fullBlocksPerDimForCell = (gridSideCount + blockSizePerDim - 1) / blockSizePerDim;
+  //int fullBlocksPerDimForCell = (gridSideCount + blockSizePerDim - 1) / blockSizePerDim;
   //dim3 threadsPerBlock3DForCell(blockSizePerDim, blockSizePerDim, blockSizePerDim);
   //dim3 fullBlocksPerGrid3DForCell(fullBlocksPerDimForCell, fullBlocksPerDimForCell, fullBlocksPerDimForCell);
 
   // 2.1.1 Label each particle
-  kernComputeIndices<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+  callCUDA_Profile(kernComputeIndices)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 
   // 2.1.2 Key sort (Key = boid index)
 #if !USE_STABLE_SORT
-  thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Unstable sort
+  callCUDA_Profile(thrust::sort_by_key)(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Unstable sort
 #else // USE_STABLE_SORT
-  thrust::stable_sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Stable sort, for comparison
+  callCUDA_Profile(thrust::stable_sort_by_key)(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Stable sort, for comparison
 #endif // USE_STABLE_SORT
 
   // 2.1.3 Find start and end
-  kernResetIntBuffer<<<threadsPerBlock1DForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellStartIndices, -1);
-  kernResetIntBuffer<<<threadsPerBlock1DForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellEndIndices, gridCellCount);
-  kernIdentifyCellStartEnd<<<threadsPerBlock1DForCell, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+  callCUDA_Profile(kernResetIntBuffer)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellStartIndices, -1);
+  callCUDA_Profile(kernResetIntBuffer)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellEndIndices, gridCellCount);
+
+#if !IDENTIFY_START_END_BY_BINARY_SEARCH
+  callCUDA_Profile(kernIdentifyCellStartEnd)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+#else // IDENTIFY_START_END_BY_BINARY_SEARCH
+  callCUDA_Profile(kernIdentifyCellStartEnd)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+#endif // IDENTIFY_START_END_BY_BINARY_SEARCH
+
 
   // 2.1.4 Update velocity using neighbor search
-  kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(
+  callCUDA_Profile(kernUpdateVelNeighborSearchScattered)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(
     numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, 
     dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
 
   // 2.1.5 Update positions
-  kernUpdatePos<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dt, dev_pos, dev_vel2);
+  callCUDA_Profile(kernUpdatePos)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dt, dev_pos, dev_vel2);
 
   // 2.1.6 Ping-pong buffers
-  cudaMemcpy(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  glm::vec3* tmp = dev_vel1; dev_vel1 = dev_vel2; dev_vel2 = tmp;//callCUDA_Profile(cudaMemcpy)(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  callCUDA_ProfileEnd();
   // End implementation
 }
 
@@ -824,40 +899,44 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // Start implementation
   dim3 fullBlocksPerGridForBoid((numObjects + blockSize - 1) / blockSize);
 
-  dim3 threadsPerBlock1DForCell((gridCellCount + blockSize - 1) / blockSize);
-
-  int fullBlocksPerDimForCell = (gridSideCount + blockSizePerDim - 1) / blockSizePerDim;
+  dim3 fullBlocksPerGridForCell((gridCellCount + blockSize - 1) / blockSize);
 
   // 2.3.1 Label each particle
-  kernComputeIndices<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+  callCUDA_Profile(kernComputeIndices)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 
   // 2.3.2 Key sort (Key = boid index)
 #if !USE_STABLE_SORT
-  thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Unstable sort
+  callCUDA_Profile(thrust::sort_by_key)(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Unstable sort
 #else // USE_STABLE_SORT
-  thrust::stable_sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Stable sort, for comparison
+  callCUDA_Profile(thrust::stable_sort_by_key)(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices); // Stable sort, for comparison
 #endif // USE_STABLE_SORT
 
   // 2.3.3 Find start and end
-  kernResetIntBuffer<<<threadsPerBlock1DForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellStartIndices, -1);
-  kernResetIntBuffer<<<threadsPerBlock1DForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellEndIndices, gridCellCount);
-  kernIdentifyCellStartEnd<<<threadsPerBlock1DForCell, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+  callCUDA_Profile(kernResetIntBuffer)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellStartIndices, -1);
+  callCUDA_Profile(kernResetIntBuffer)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(gridCellCount, dev_gridCellEndIndices, gridCellCount);
+
+#if !IDENTIFY_START_END_BY_BINARY_SEARCH
+  callCUDA_Profile(kernIdentifyCellStartEnd)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+#else // IDENTIFY_START_END_BY_BINARY_SEARCH
+  callCUDA_Profile(kernIdentifyCellStartEnd)<<<fullBlocksPerGridForCell, threadsPerBlock>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+#endif // IDENTIFY_START_END_BY_BINARY_SEARCH
 
   // 2.3.4 Reshuffle pos+vel
-  kernReshuffle<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_pos_reshuffle, dev_pos, dev_particleArrayIndices);
-  kernReshuffle<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_vel_reshuffle, dev_vel1, dev_particleArrayIndices);
+  callCUDA_Profile(kernReshuffle)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_pos_reshuffle, dev_pos, dev_particleArrayIndices);
+  callCUDA_Profile(kernReshuffle)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dev_vel_reshuffle, dev_vel1, dev_particleArrayIndices);
 
   // 2.3.5 Update velocity using neighbor search (vel2 is reshuffled)
-  kernUpdateVelNeighborSearchCoherent<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(
+  callCUDA_Profile(kernUpdateVelNeighborSearchCoherent)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(
     numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, 
     dev_gridCellStartIndices, dev_gridCellEndIndices, dev_pos_reshuffle, dev_vel_reshuffle, dev_vel2);
 
   // 2.3.6 Update positions
-  kernUpdatePos<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dt, dev_pos_reshuffle, dev_vel2);
+  callCUDA_Profile(kernUpdatePos)<<<fullBlocksPerGridForBoid, threadsPerBlock>>>(numObjects, dt, dev_pos_reshuffle, dev_vel2);
 
   // 2.3.7 Ping-pong buffers
-  cudaMemcpy(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(dev_pos, dev_pos_reshuffle, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  glm::vec3* tmp = dev_vel1; dev_vel1 = dev_vel2; dev_vel2 = tmp;//callCUDA_Profile(cudaMemcpy)(dev_vel1, dev_vel2, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  tmp = dev_pos; dev_pos = dev_pos_reshuffle; dev_pos_reshuffle = tmp;//callCUDA_Profile(cudaMemcpy)(dev_pos, dev_pos_reshuffle, numObjects * sizeof(glm::vec3), cudaMemcpyDeviceToDevice);
+  callCUDA_ProfileEnd();
   // End implementation
 }
 
