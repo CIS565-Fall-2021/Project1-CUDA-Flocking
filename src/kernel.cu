@@ -260,7 +260,15 @@ __device__ glm::vec3 computeCohesion(int N, int iSelf, const glm::vec3* pos,
 __device__ glm::vec3 computeSeparation(int N, int iSelf, const glm::vec3* pos,
                                        const glm::vec3* vel)
 {
-    return glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 c{ 0.0f, 0.0f, 0.0f };
+    for (int i = 0; i < N; i++)
+    {
+        if ((i != iSelf) && (distanceBoid(pos[iSelf], pos[i]) < rule2Distance))
+        {
+             c -= (pos[i] - pos[iSelf]);
+        }
+    }
+    return c * rule2Scale;
 }
 
 /**
@@ -269,7 +277,19 @@ __device__ glm::vec3 computeSeparation(int N, int iSelf, const glm::vec3* pos,
 __device__ glm::vec3 computeAlignment(int N, int iSelf, const glm::vec3* pos,
                                       const glm::vec3* vel)
 {
-    return glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 perceived_velocity{ 0.0f, 0.0f, 0.0f };
+    int number_of_neighbors{ 0 };
+
+    for (int i = 0; i < N; i++)
+    {
+        if ((i != iSelf) && (distanceBoid(pos[iSelf], pos[i]) < rule3Distance))
+        {
+            number_of_neighbors++;
+            perceived_velocity += vel[i];
+        }
+    }
+    perceived_velocity /= number_of_neighbors;
+    return perceived_velocity * rule3Scale;
 }
 
 /**
@@ -283,7 +303,9 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 {
   // Rule 2: boids try to stay a distance d away from each other
   // Rule 3: boids try to match the speed of surrounding boids
-  return computeCohesion(N, iSelf, pos, vel);
+  return vel[iSelf] + computeAlignment(N, iSelf, pos, vel) + 
+                      computeSeparation(N, iSelf, pos, vel) +
+                      computeCohesion(N, iSelf, pos, vel);
 }
 
 /**
@@ -308,27 +330,10 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
     // Clamp the speed 
     if (newSpeed >= maxSpeed)
     {
-        newVelocity = newDir * maxSpeed;
+         newVelocity = newDir * maxSpeed;
     }
     // Record the new velocity into vel2. Question: why NOT vel1?
     vel2[index] = newVelocity;
-#if 0
-    for (int i = 0; i < N; i++)
-    {
-        // Compute a new velocity based on pos and vel1
-        glm::vec3 newVelocity = computeVelocityChange(N, i, pos, vel1);
-
-        glm::vec3 newDir = glm::normalize(newVelocity);
-        float newSpeed = glm::length(newVelocity);
-        // Clamp the speed 
-        if (newSpeed >= maxSpeed)
-        {
-            newVelocity = newDir * maxSpeed;
-        }
-        // Record the new velocity into vel2. Question: why NOT vel1?
-        vel2[i] = newVelocity;
-    }
-#endif
 }
 
 /**
@@ -432,6 +437,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 */
 void Boids::stepSimulationNaive(float dt) {
     assert(numObjects >= 0);
+
     // TODO-1.2 - use the kernels you wrote to step the simulation forward in time.
     dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
   // Boids examine neighboring boids to determine new celocity
@@ -442,7 +448,7 @@ void Boids::stepSimulationNaive(float dt) {
   // Boids update position based on velocity and change in time
     kernUpdatePos <<<fullBlocksPerGrid, blockSize >>> (numObjects, dt,
                                                        dev_pos, dev_vel2);
-  // TODO-1.2 ping-pong the velocity buffers
+    // TODO-1.2 ping-pong the velocity buffers
     glm::vec3* temp = dev_vel2;
     dev_vel2 = dev_vel1;
     dev_vel1 = temp;
