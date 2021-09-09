@@ -443,19 +443,12 @@ __global__ void kernUpdateVelNeighborSearchScattered(
                                        boid_gridPos.z, gridResolution);
 
     // - Identify which cells may contain neighbors. This isn't always 8.
-    // FIXME: use grid pos rounding to determine search directions!
-    // assume the boid is biased towards the negative direction
-    glm::vec3 neighbors[3] = {glm::vec3(-cellWidth / 2, 0.f, 0.f),
-                              glm::vec3(0.f, -cellWidth / 2, 0.f),
-                              glm::vec3(0.f, 0.f, -cellWidth / 2)};
-    int dirAlongAxes[3]    = {-1, -1, -1};
+    // use grid pos rounding to determine search directions!
+    glm::ivec3 boid_gridPosRound = static_cast<glm::ivec3>(
+        glm::round((boid_pos - gridMin) * inverseCellWidth));
+    glm::ivec3 biasAlongAxes{-1, -1, -1};
     for (int i = 0; i < 3; ++i) {
-      glm::vec3 neighbor_pos = boid_pos + neighbors[i];
-      int neighbor_gridIdx =
-          gridIndex1D(neighbor_pos, gridMin, inverseCellWidth, gridResolution);
-      // if boid is biased towards the positive direction, correct the direction
-      // vector
-      if (neighbor_gridIdx == boid_gridIdx) dirAlongAxes[i] = 1;
+      if (boid_gridPosRound[i] != boid_gridPos[i]) biasAlongAxes[i] = 1;
     }
 
     int valid_neighbor_idx_list[8];
@@ -464,9 +457,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
       for (int yStep = 0; yStep <= 1; ++yStep) {
         for (int zStep = 0; zStep <= 1; ++zStep) {
           glm::ivec3 grid_pos =
-              boid_gridPos + glm::ivec3(xStep * dirAlongAxes[0],
-                                        yStep * dirAlongAxes[1],
-                                        zStep * dirAlongAxes[2]);
+              boid_gridPos + glm::ivec3(xStep * biasAlongAxes[0],
+                                        yStep * biasAlongAxes[1],
+                                        zStep * biasAlongAxes[2]);
           int grid_idx = gridIndex3Dto1D(grid_pos.x, grid_pos.y, grid_pos.z,
                                          gridResolution);
           if (gridCellStartIndices[grid_idx] >= 0) {
