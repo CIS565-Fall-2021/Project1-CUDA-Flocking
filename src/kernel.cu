@@ -777,7 +777,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 #if !USE_RULE3_FROM_CONARD_PARKER
     dVel += perceivedVel * rule3Scale; // From instruction
 #else // USE_RULE3_FROM_CONARD_PARKER
-    dVel += (perceivedVel - vel1[boidIndex]) * rule3Scale; // From Conard Parker's, maybe it runs much better than the instructions' now? 
+    dVel += (perceivedVel - vel1[index]) * rule3Scale; // From Conard Parker's, maybe it runs much better than the instructions' now? 
 #endif // USE_RULE3_FROM_CONARD_PARKER
   }
 
