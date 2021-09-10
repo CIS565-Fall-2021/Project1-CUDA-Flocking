@@ -230,18 +230,20 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
 * in the `pos` and `vel` arrays.
 */
 __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *pos, const glm::vec3 *vel) {
+  glm::vec3 ret_vel = vel[iSelf];
 // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-  glm::vec3 ret_vel;
   glm::vec3 perceived_center;
-  int num_neighbors{ 0 };
+  int num_neighbors_rule1{ 0 };
   for (int boid_idx = 0; boid_idx < N; boid_idx++) {
     if (boid_idx != iSelf && glm::distance(pos[iSelf], pos[boid_idx]) < rule1Distance) {
       perceived_center += pos[boid_idx];
-      num_neighbors++;
+      num_neighbors_rule1++;
     }
   }
-  perceived_center /= num_neighbors;
-  ret_vel += (perceived_center - pos[iSelf]) * rule1Scale;
+  if (num_neighbors_rule1 > 0) {
+    perceived_center /= num_neighbors_rule1;
+    ret_vel += (perceived_center - pos[iSelf]) * rule1Scale;
+  }
   // Rule 2: boids try to stay a distance d away from each other
   glm::vec3 c;
   for (int boid_idx = 0; boid_idx < N; boid_idx++) {
@@ -252,13 +254,17 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
   ret_vel += c * rule2Scale;
   // Rule 3: boids try to match the speed of surrounding boids
   glm::vec3 perceived_velocity;
+  int num_neighbors_rule2{ 0 };
   for (int boid_idx = 0; boid_idx < N; boid_idx++) {
     if (boid_idx != iSelf && glm::distance(pos[iSelf], pos[boid_idx]) < rule3Distance) {
       perceived_velocity += vel[boid_idx];
+      num_neighbors_rule2++;
     }
   }
-  perceived_velocity /= num_neighbors;
-  ret_vel += perceived_velocity * rule3Scale;
+  if (num_neighbors_rule2 > 0) {
+    perceived_velocity /= num_neighbors_rule2;
+    ret_vel += perceived_velocity * rule3Scale;
+  }
   return ret_vel;
 }
 
@@ -275,10 +281,9 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
   // Compute a new velocity based on pos and vel1
   glm::vec3 new_vel = computeVelocityChange(N, index, pos, vel1);
   // Clamp the speed
-  new_vel.x = new_vel.x > maxSpeed ? maxSpeed : new_vel.x;
-  new_vel.y = new_vel.y < maxSpeed ? maxSpeed : new_vel.y;
-  new_vel.z = new_vel.z < maxSpeed ? maxSpeed : new_vel.z;
-  // Record the new velocity into vel2. Question: why NOT vel1?
+  float speed = glm::length(new_vel);
+  new_vel = speed > maxSpeed ? (new_vel / speed) * maxSpeed : new_vel;
+  // Record the new velocity into vel2.
   vel2[index] = new_vel;
 }
 
