@@ -498,10 +498,12 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 #if 0
     LabelingBoidWithGridCellIndexUnitTest();
     LabelingBoidWithIndexUnitTest();
+    SortingUnitTest();
 #endif
     
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
+
   // - Naively unroll the loop for finding the start and end indices of each
   //   cell's data pointers in the array of boid indices
   // - Perform velocity updates using neighbor search
@@ -565,6 +567,35 @@ void Boids::LabelingBoidWithIndexUnitTest()
     std::cout << "after labeling boids: " << std::endl;
     for (int i = 0; i < N; i++) {
         std::cout << "[" << i << "]: " << testArray[i] << '\n';
+    }
+}
+
+void Boids::SortingUnitTest()
+{
+    static bool runOnce = false;
+    if (!runOnce) {
+        runOnce = true;
+        dev_thrust_particleArrayIndices =
+            thrust::device_pointer_cast(dev_particleArrayIndices);
+        dev_thrust_particleGridIndices =
+            thrust::device_pointer_cast(dev_particleGridIndices);
+        thrust::sort_by_key(dev_thrust_particleGridIndices,
+            dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
+
+        std::unique_ptr<int[]>intKeys{ new int[numObjects] };
+        std::unique_ptr<int[]>intValues{ new int[numObjects] };
+
+        cudaMemcpy(intKeys.get(), dev_particleGridIndices, sizeof(int) * numObjects,
+            cudaMemcpyDeviceToHost);
+        cudaMemcpy(intValues.get(), dev_particleArrayIndices, sizeof(int) * numObjects,
+            cudaMemcpyDeviceToHost);
+        checkCUDAErrorWithLine("memcpy back failed!");
+
+        std::cout << "after unstable sort: " << std::endl;
+        for (int i = 0; i < numObjects; i++) {
+            std::cout << "  key: " << intKeys[i];
+            std::cout << " value: " << intValues[i] << std::endl;
+        }
     }
 }
 
