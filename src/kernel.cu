@@ -174,6 +174,12 @@ void Boids::initSimulation(int N) {
   gridMinimum.y -= halfGridWidth;
   gridMinimum.z -= halfGridWidth;
 
+  std::cout << "gridCellWidth: " << gridCellWidth << std::endl;
+  std::cout << "gridInverseCellWidth: " << gridInverseCellWidth << "\n";
+  std::cout << "gridSideCount: " << gridSideCount << std::endl;
+  std::cout << "gridCellCount: " << gridCellCount << "\n";
+  std::cout << "gridMinimum: " << gridMinimum << "\n";
+
   // Part-2.1 Part-2.3 - Allocate additional buffers here.
   cudaMalloc((void **)&dev_particleArrayIndices, N * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
@@ -412,9 +418,14 @@ __global__ void kernIdentifyCellStartEnd(int N, const int *particleGridIndices,
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N) {
     int particleGridIdx      = particleGridIndices[idx];
-    int prev_particleGridIdx = (idx > 0) ? particleGridIndices[idx - 1] : -1;
-    int next_particleGridIdx =
-        (idx < N - 1) ? particleGridIndices[idx + 1] : -1;
+    int prev_particleGridIdx = -1, next_particleGridIdx = -1;
+
+    if (idx > 0) {
+      prev_particleGridIdx = particleGridIndices[idx - 1];
+    }
+    if (idx < N - 1) {
+      next_particleGridIdx = particleGridIndices[idx + 1];
+    }
 
     if (idx == 0 || particleGridIdx != prev_particleGridIdx) {
       gridCellStartIndices[particleGridIdx] = idx;
@@ -472,19 +483,17 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     // - Neighbor Search Velocity Update Main Loop
     glm::vec3 boid_vel = vel1[idx];
     glm::vec3 new_vel  = boid_vel;
+    // Rule 1: boids fly towards their local perceived center of mass, which
+    // excludes themselves
+    glm::vec3 perceived_center{0.0f, 0.0f, 0.0f};
+    int numInfluencingNeighbors = 0;
     for (int i = 0; i < num_valid_neighbors; ++i) {
       // - For each cell, read the start/end indices in the boid pointer array.
       int cell_idx            = valid_neighbor_idx_list[i];
       int cell_boid_start_idx = gridCellStartIndices[cell_idx];
       int cell_boid_end_idx   = gridCellEndIndices[cell_idx];
-
       // - Access each boid in the cell and compute velocity change from
       //   the boids rules, if this boid is within the neighborhood distance.
-      //
-      // Rule 1: boids fly towards their local perceived center of mass, which
-      // excludes themselves
-      glm::vec3 perceived_center{0.0f, 0.0f, 0.0f};
-      int numInfluencingNeighbors = 0;
       for (int j = cell_boid_start_idx; j <= cell_boid_end_idx; ++j) {
         int neighbor_boid_idx = particleArrayIndices[j];
         if (neighbor_boid_idx != idx &&
@@ -493,13 +502,18 @@ __global__ void kernUpdateVelNeighborSearchScattered(
           ++numInfluencingNeighbors;
         }
       }
-      if (numInfluencingNeighbors > 0) {
-        perceived_center /= numInfluencingNeighbors;
-      }
-      new_vel += (perceived_center - boid_pos) * rule1Scale;
+    }
+    if (numInfluencingNeighbors > 0) {
+      perceived_center /= numInfluencingNeighbors;
+    }
+    new_vel += (perceived_center - boid_pos) * rule1Scale;
 
-      // Rule 2: boids try to stay a distance d away from each other
-      glm::vec3 center{0.f, 0.f, 0.f};
+    // Rule 2: boids try to stay a distance d away from each other
+    glm::vec3 center{0.f, 0.f, 0.f};
+    for (int i = 0; i < num_valid_neighbors; ++i) {
+      int cell_idx            = valid_neighbor_idx_list[i];
+      int cell_boid_start_idx = gridCellStartIndices[cell_idx];
+      int cell_boid_end_idx   = gridCellEndIndices[cell_idx];
       for (int j = cell_boid_start_idx; j <= cell_boid_end_idx; ++j) {
         int neighbor_boid_idx = particleArrayIndices[j];
         if (neighbor_boid_idx != idx &&
@@ -507,11 +521,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
           center -= (pos[neighbor_boid_idx] - boid_pos);
         }
       }
-      new_vel += center * rule2Scale;
+    }
+    new_vel += center * rule2Scale;
 
-      // Rule 3: boids try to match the speed of surrounding boids
-      numInfluencingNeighbors = 0;
-      glm::vec3 perceived_vel{0.f, 0.f, 0.f};
+    // Rule 3: boids try to match the speed of surrounding boids
+    numInfluencingNeighbors = 0;
+    glm::vec3 perceived_vel{0.f, 0.f, 0.f};
+    for (int i = 0; i < num_valid_neighbors; ++i) {
+      int cell_idx            = valid_neighbor_idx_list[i];
+      int cell_boid_start_idx = gridCellStartIndices[cell_idx];
+      int cell_boid_end_idx   = gridCellEndIndices[cell_idx];
       for (int j = cell_boid_start_idx; j <= cell_boid_end_idx; ++j) {
         int neighbor_boid_idx = particleArrayIndices[j];
         if (neighbor_boid_idx != idx &&
@@ -520,11 +539,11 @@ __global__ void kernUpdateVelNeighborSearchScattered(
           ++numInfluencingNeighbors;
         }
       }
-      if (numInfluencingNeighbors > 0) {
-        perceived_vel /= numInfluencingNeighbors;
-      }
-      new_vel += perceived_vel * rule3Scale;
     }
+    if (numInfluencingNeighbors > 0) {
+      perceived_vel /= numInfluencingNeighbors;
+    }
+    new_vel += perceived_vel * rule3Scale;
 
     // - Clamp the speed change before putting the new speed in vel2
     if (glm::length(new_vel) > maxSpeed) {
