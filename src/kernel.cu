@@ -264,19 +264,22 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 		if (distanceToBoid < rule2Distance){
 			c -= selfToThem;
 		}
-		rule2Vel = c * rule2Scale;
 		// --- Rule 3: boids try to match the speed of surrounding boids
 		if (distanceToBoid < rule3Distance){
 			perceivedVel += vel[i];
 		}
-
 	}
-	CM /= rule1Neighbors;	// divide by the number of boids
-	rule1Vel = (CM - pos[iSelf]) * rule1Scale;
+	//if (rule1Neighbors > 0){
+		CM /= (float)rule1Neighbors;	// divide by the number of boids
+		rule1Vel = (CM - pos[iSelf]) * rule1Scale;
+	//}
+	//else{
+	//	rule1Vel = glm::vec3(0.0f);
+	//}
 	rule2Vel = c * rule2Scale;
 	rule3Vel = perceivedVel * rule3Scale;
 
-	return rule1Vel + rule2Vel + rule3Vel;
+	return vel[iSelf] + rule1Vel + rule2Vel + rule3Vel;
 }
 
 /**
