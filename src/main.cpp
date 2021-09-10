@@ -13,12 +13,19 @@
 // ================
 
 // LOOK-2.1 LOOK-2.3 - toggles for UNIFORM_GRID and COHERENT_GRID
-#define VISUALIZE 1
-#define UNIFORM_GRID 0
-#define COHERENT_GRID 0
+//#define VISUALIZE 0
+//#define UNIFORM_GRID 1
+//#define COHERENT_GRID 1
+
+#define VISUALIZE PFM_ANA_VISUALIZE
+#define UNIFORM_GRID PFM_ANA_UNIFORM_GRID
+#define COHERENT_GRID PFM_ANA_COHERENT_GRID
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 5000;
+const int N_FOR_VIS = PFM_ANA_NUM_OBJECTS;
+//const int N_FOR_VIS = 100000;
+////500000; //300000; //150000; 
+////100000; //60000; //20000; //5000;
 const float DT = 0.2f;
 
 /**
@@ -231,6 +238,9 @@ void initShaders(GLuint * program) {
         timebase = time;
         frame = 0;
       }
+#if ENABLE_PROFILE_LOG
+      utilityCore::ProfileLog::get().step(fps, time * 1000.);
+#endif ENABLE_PROFILE_LOG
 
       runCUDA();
 
