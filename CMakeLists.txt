@@ -70,6 +70,7 @@ set(headers
     src/kernel.h
     src/main.hpp
     src/utilityCore.hpp
+    src/print_glm.hpp
     )
 
 set(sources
@@ -77,6 +78,7 @@ set(sources
     src/kernel.cu
     src/main.cpp
     src/utilityCore.cpp
+    src/print_glm.cpp
     )
 
 list(SORT headers)

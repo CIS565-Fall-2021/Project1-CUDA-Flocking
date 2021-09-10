@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "cudaMat4.hpp"
+#include "print_glm.hpp"
 
 #define PI                      3.1415926535897932384626422832795028841971
 #define TWO_PI                  6.2831853071795864769252867665590057683943
