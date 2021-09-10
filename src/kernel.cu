@@ -419,6 +419,21 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   // Identify the start point of each cell in the gridIndices array.
   // This is basically a parallel unrolling of a loop that goes
   // "this index doesn't match the one before it, must be a new cell!"
+    int index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= N) {
+        return;
+    }
+    int indexBefore = index - 1;
+    if (indexBefore >= 0)
+    {
+        int cellNumIndexBefore = particleGridIndices[indexBefore];
+        int cellNumIndex = particleGridIndices[index];
+        if (cellNumIndexBefore != cellNumIndex)
+        {
+            gridCellEndIndices[cellNumIndexBefore] = indexBefore;
+            gridCellStartIndices[cellNumIndex] = index;
+        }
+    }
 }
 
 __global__ void kernUpdateVelNeighborSearchScattered(
@@ -479,8 +494,7 @@ void Boids::stepSimulationNaive(float dt) {
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {
-    
-
+ 
     assert(numObjects >= 0);
     dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
   // TODO-2.1
@@ -499,13 +513,29 @@ void Boids::stepSimulationScatteredGrid(float dt) {
     LabelingBoidWithGridCellIndexUnitTest();
     LabelingBoidWithIndexUnitTest();
     SortingUnitTest();
+    StartEndUnitTest();
 #endif
     
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
-
+    dev_thrust_particleArrayIndices =
+        thrust::device_pointer_cast(dev_particleArrayIndices);
+    dev_thrust_particleGridIndices =
+        thrust::device_pointer_cast(dev_particleGridIndices);
+    thrust::sort_by_key(dev_thrust_particleGridIndices,
+        dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
   // - Naively unroll the loop for finding the start and end indices of each
   //   cell's data pointers in the array of boid indices
+   
+    // -1 indicating that a cell does not enclose any boids
+    dim3 fullBlocksPerGridCellArrays((gridCellCount + blockSize - 1) / blockSize);
+    kernResetIntBuffer <<<fullBlocksPerGridCellArrays, blockSize >>> (gridCellCount,
+        dev_gridCellStartIndices, -1);
+    kernResetIntBuffer << <fullBlocksPerGridCellArrays, blockSize >> > (gridCellCount,
+        dev_gridCellEndIndices, -1);
+    kernIdentifyCellStartEnd <<<fullBlocksPerGrid, blockSize >>> (numObjects, 
+        dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+    
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed
@@ -595,6 +625,31 @@ void Boids::SortingUnitTest()
         for (int i = 0; i < numObjects; i++) {
             std::cout << "  key: " << intKeys[i];
             std::cout << " value: " << intValues[i] << std::endl;
+        }
+    }
+}
+
+void Boids::StartEndUnitTest()
+{
+    static bool runOnce = false;
+    if (!runOnce) {
+        runOnce = true;
+
+        std::unique_ptr<int[]>intKeys{ new int[gridCellCount] };
+        std::unique_ptr<int[]>intValues{ new int[gridCellCount] };
+
+        cudaMemcpy(intKeys.get(), dev_gridCellStartIndices, sizeof(int) * gridCellCount,
+            cudaMemcpyDeviceToHost);
+        cudaMemcpy(intValues.get(), dev_gridCellEndIndices, sizeof(int) * gridCellCount,
+            cudaMemcpyDeviceToHost);
+        checkCUDAErrorWithLine("memcpy back failed!");
+
+        std::cout << "Start and end arrays: " << std::endl;
+        for (int i = 0; i < gridCellCount; i++) {
+            std::cout << "Cell: " << i << '\n';
+            std::cout << "  start: " << intKeys[i];
+            std::cout << " end: " << intValues[i] << std::endl;
+            std::cout << '\n';
         }
     }
 }

@@ -21,4 +21,5 @@ namespace Boids {
     void LabelingBoidWithGridCellIndexUnitTest();
     void LabelingBoidWithIndexUnitTest();
     void SortingUnitTest();
+    void StartEndUnitTest();
 }
