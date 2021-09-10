@@ -464,9 +464,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
     int valid_neighbor_idx_list[8];
     int num_valid_neighbors = 0;
-    for (int xStep = 0; xStep <= 1; ++xStep) {
+    for (int zStep = 0; zStep <= 1; ++zStep) {
       for (int yStep = 0; yStep <= 1; ++yStep) {
-        for (int zStep = 0; zStep <= 1; ++zStep) {
+        for (int xStep = 0; xStep <= 1; ++xStep) {
+          // z-y-x loop corresponds to LOOK-2.3 question at gridIndex3Dto1D()
           glm::ivec3 grid_pos =
               boid_gridPos + glm::ivec3(xStep * biasAlongAxes[0],
                                         yStep * biasAlongAxes[1],
