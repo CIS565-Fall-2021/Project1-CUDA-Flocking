@@ -233,7 +233,32 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
   // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
   // Rule 2: boids try to stay a distance d away from each other
   // Rule 3: boids try to match the speed of surrounding boids
-  return glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 selfPos = pos[iSelf];
+    glm::vec3 v1(0.0), v2(0.0), v3(0.0);
+    int numNeighborsRule1 = 0, numNeighborsRule3 = 0;
+    for (int i = 0; i < N; ++i) {
+        glm::vec3 iPos = pos[i];
+        float dist = glm::distance(iPos, selfPos);
+        if (i != iSelf) {
+            if (dist < rule1Distance) {
+                v1 += iPos;
+                ++numNeighborsRule1;
+            }
+            if (dist < rule2Distance) {
+                v2 -= iPos - selfPos;
+            }
+            if (dist < rule3Distance) {
+                v3 += vel[i];
+                ++numNeighborsRule3;
+            }
+        }
+    }
+    v1 /= numNeighborsRule1;
+    v1 = (v1 - selfPos) * rule1Scale;
+    v2 *= rule2Scale;
+    v3 /= numNeighborsRule3;
+    v3 *= rule3Scale;
+    return v1 + v2 + v3;
 }
 
 /**
@@ -245,6 +270,16 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
   // Compute a new velocity based on pos and vel1
   // Clamp the speed
   // Record the new velocity into vel2. Question: why NOT vel1?
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index >= N) {
+        return;
+    }
+    glm::vec3 vel = vel1[index] + computeVelocityChange(N, index, pos, vel1);
+    float l = glm::length(vel);
+    if (l > maxSpeed) {
+        vel *= maxSpeed / l;
+    }
+    vel2[index] = vel;
 }
 
 /**
