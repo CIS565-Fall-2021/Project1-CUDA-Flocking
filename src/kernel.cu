@@ -401,6 +401,7 @@ __global__ void kernComputeIndices(int N, int gridResolution,
     gridIndices[index] = index1D;
     // - Set up a parallel array of integer indices as pointers to the actual
     //   boid data in pos and vel1/vel2
+    indices[index] = index;
 }
 
 // LOOK-2.1 Consider how this could be useful for indicating that a cell
@@ -496,7 +497,9 @@ void Boids::stepSimulationScatteredGrid(float dt) {
                                                             dev_particleGridIndices);
 #if 0
     LabelingBoidWithGridCellIndexUnitTest();
+    LabelingBoidWithIndexUnitTest();
 #endif
+    
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
   // - Naively unroll the loop for finding the start and end indices of each
@@ -543,6 +546,20 @@ void Boids::LabelingBoidWithGridCellIndexUnitTest()
     std::unique_ptr<int[]>testArray{ new int[N] };
     // How to copy data back to the CPU side from the GPU
     cudaMemcpy(testArray.get(), dev_particleGridIndices, sizeof(int) * N,
+        cudaMemcpyDeviceToHost);
+
+    std::cout << "after labeling boids: " << std::endl;
+    for (int i = 0; i < N; i++) {
+        std::cout << "[" << i << "]: " << testArray[i] << '\n';
+    }
+}
+
+void Boids::LabelingBoidWithIndexUnitTest()
+{
+    int N = 100;
+    std::unique_ptr<int[]>testArray{ new int[N] };
+    // How to copy data back to the CPU side from the GPU
+    cudaMemcpy(testArray.get(), dev_particleArrayIndices, sizeof(int) * N,
         cudaMemcpyDeviceToHost);
 
     std::cout << "after labeling boids: " << std::endl;
