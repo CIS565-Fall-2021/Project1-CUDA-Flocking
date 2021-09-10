@@ -22,4 +22,5 @@ namespace Boids {
     void LabelingBoidWithIndexUnitTest();
     void SortingUnitTest();
     void StartEndUnitTest();
+    void PrintCellStats();
 }
