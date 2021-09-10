@@ -298,6 +298,9 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
     glm::vec3 *vel1, glm::vec3 *vel2) {
     // Compute Boid associated with thread
     int index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= N) {
+        return;
+    }
 
     // Compute a new velocity based on pos and vel1
     glm::vec3 new_velocity = vel1[index] + computeVelocityChange(N, index, pos, vel1);
