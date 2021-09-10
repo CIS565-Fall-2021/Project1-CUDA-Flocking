@@ -230,19 +230,53 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
 * in the `pos` and `vel` arrays.
 */
 __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *pos, const glm::vec3 *vel) {
-  // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-	// rather than exclude our position in the for loop with a conditional,
-	// we can initialize the center of mass as the negative of our pos,
-	// cancelling it out when it is later added
-	glm::vec3 CM = pos[iSelf] * (float)-1;
+
+	// rule1 vars
+	int rule1Neighbors = 0;
+	glm::vec3 CM = glm::vec3(0);
+	glm::vec3 rule1Vel;
+	// rule2 vars
+	glm::vec3 c = glm::vec3(0);
+	glm::vec3 rule2Vel;
+	// rule3 vars
+	glm::vec3 perceivedVel = glm::vec3(0);
+	glm::vec3 rule3Vel;
+
+	// spacial vector between this boid and the boid being checked
+	glm::vec3 selfToThem;
+
 	for (int i=0; i<N; i++){
-		CM += pos[i];
+		// be sure to skip ourself
+		if (i == iSelf){
+			continue;
+		}
+
+		selfToThem = pos[i] - pos[iSelf];
+		float distanceToBoid = glm::sqrt(glm::dot(selfToThem, selfToThem));
+
+		// --- Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
+		if (distanceToBoid < rule1Distance){
+			CM += pos[i];
+			rule1Neighbors++;
+		}
+
+		// --- Rule 2 boids try to stay a distance d away from each other
+		if (distanceToBoid < rule2Distance){
+			c -= selfToThem;
+		}
+		rule2Vel = c * rule2Scale;
+		// --- Rule 3: boids try to match the speed of surrounding boids
+		if (distanceToBoid < rule3Distance){
+			perceivedVel += vel[i];
+		}
+
 	}
-	CM /= N;
-  // Rule 2: boids try to stay a distance d away from each other
-  // Rule 3: boids try to match the speed of surrounding boids
-	return CM - pos[iSelf];
-  //return glm::vec3(0.0f, 1.0f, 0.0f);
+	CM /= rule1Neighbors;	// divide by the number of boids
+	rule1Vel = (CM - pos[iSelf]) * rule1Scale;
+	rule2Vel = c * rule2Scale;
+	rule3Vel = perceivedVel * rule3Scale;
+
+	return rule1Vel + rule2Vel + rule3Vel;
 }
 
 /**
