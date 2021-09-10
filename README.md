@@ -99,7 +99,7 @@ First of all, there are some questions and answers about the performance:
 
 
 
-See [further analysis](##Performance Analysis).
+See [further analysis](##performance-analysis).
 
 
 
@@ -123,7 +123,7 @@ First check the framerate. Because the framerate of Naive is too low when the nu
 
 
 
-It turns out that the performance is affected much with the number of boids. Also, the performance increases rapidly with uniform grid, and the performance is even better with coherent boids data in most cases. As the answer of [questions](#Questions about Performance Analysis) describes, I cannot tell the performance is better with coherent boids data when the number of boids is small. The duration of each event is needed.
+It turns out that the performance is affected much with the number of boids. Also, the performance increases rapidly with uniform grid, and the performance is even better with coherent boids data in most cases. As the answer of [questions](#questions-about-performance-analysis) describes, I cannot tell the performance is better with coherent boids data when the number of boids is small. The duration of each event is needed.
 
 
 
@@ -149,7 +149,7 @@ The results are the same with visualization:
 
 
 
-We can see that `kernUpdateVelNeighborSearchCoherent` is faster than `kernUpdateVelNeighborSearchScattered` in all cases, but it needs to reshuffle to maintain the coherent boids data, as the answer of [questions](#Questions about Performance Analysis) describes. As a result, `Coherent` affects little in cases with very few boids, but affects much in cases with more boids. 
+We can see that `kernUpdateVelNeighborSearchCoherent` is faster than `kernUpdateVelNeighborSearchScattered` in all cases, but it needs to reshuffle to maintain the coherent boids data, as the answer of [questions](#questions-about-performance-analysis) describes. As a result, `Coherent` affects little in cases with very few boids, but affects much in cases with more boids. 
 
 
 
@@ -177,7 +177,7 @@ Further analysis on each event shows more information.
 
 
 
-As the answer of [questions](#Questions about Performance Analysis) describes, when the number of boids is small, the main cost comes from `thrust::sort_by_key`, which is not controlled by block size, so changing the block size rarely affects the performance. When the number of boids is large, the main cost comes from `kernUpdateVelNeighborSearchCoherent`, and it produces much latency of memory access. 
+As the answer of [questions](#questions-about-performance-analysis) describes, when the number of boids is small, the main cost comes from `thrust::sort_by_key`, which is not controlled by block size, so changing the block size rarely affects the performance. When the number of boids is large, the main cost comes from `kernUpdateVelNeighborSearchCoherent`, and it produces much latency of memory access. 
 
 
 
@@ -221,5 +221,5 @@ Generally, the duration of `kernResetIntBuffer` for each cell decreases when the
 
 
 
-Raw data of performance analysis can be found in this repository.
+- Raw data of performance analysis can be found in this repository.
 
