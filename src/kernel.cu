@@ -386,9 +386,19 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
 
 __global__ void kernComputeIndices(int N, int gridResolution,
   glm::vec3 gridMin, float inverseCellWidth,
-  glm::vec3 *pos, int *indices, int *gridIndices) {
+  glm::vec3 *pos, int *indices, int *gridIndices) 
+{
+    int index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= N) {
+        return;
+    }
     // TODO-2.1
     // - Label each boid with the index of its grid cell.
+    int iX = glm::floor((pos[index].x - gridMin.x) * inverseCellWidth);
+    int iY = glm::floor((pos[index].y - gridMin.y) * inverseCellWidth);
+    int iZ = glm::floor((pos[index].z - gridMin.z) * inverseCellWidth);
+    int index1D = gridIndex3Dto1D(iX, iY, iZ, gridResolution);
+    gridIndices[index] = index1D;
     // - Set up a parallel array of integer indices as pointers to the actual
     //   boid data in pos and vel1/vel2
 }
@@ -468,11 +478,25 @@ void Boids::stepSimulationNaive(float dt) {
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {
+    
+
+    assert(numObjects >= 0);
+    dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
   // TODO-2.1
   // Uniform Grid Neighbor search using Thrust sort.
   // In Parallel:
   // - label each particle with its array index as well as its grid index.
   //   Use 2x width grids.
+    kernComputeIndices <<<fullBlocksPerGrid, blockSize >>> (numObjects,
+                                                            gridSideCount,
+                                                            gridMinimum,
+                                                            gridInverseCellWidth,
+                                                            dev_pos, 
+                                                            dev_particleArrayIndices,
+                                                            dev_particleGridIndices);
+#if 0
+    LabelingBoidWithGridCellIndexUnitTest();
+#endif
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
   // - Naively unroll the loop for finding the start and end indices of each
@@ -480,6 +504,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed
+
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
@@ -512,9 +537,23 @@ void Boids::endSimulation() {
   cudaFree(dev_gridCellEndIndices);
 }
 
+void Boids::LabelingBoidWithGridCellIndexUnitTest()
+{
+    int N = 100;
+    std::unique_ptr<int[]>testArray{ new int[N] };
+    // How to copy data back to the CPU side from the GPU
+    cudaMemcpy(testArray.get(), dev_particleGridIndices, sizeof(int) * N,
+        cudaMemcpyDeviceToHost);
+
+    std::cout << "after labeling boids: " << std::endl;
+    for (int i = 0; i < N; i++) {
+        std::cout << "[" << i << "]: " << testArray[i] << '\n';
+    }
+}
+
 void Boids::unitTest() {
   // LOOK-1.2 Feel free to write additional tests here.
-
+#if 0
   // test unstable sort
   int *dev_intKeys;
   int *dev_intValues;
@@ -574,4 +613,5 @@ void Boids::unitTest() {
   cudaFree(dev_intValues);
   checkCUDAErrorWithLine("cudaFree failed!");
   return;
+#endif
 }

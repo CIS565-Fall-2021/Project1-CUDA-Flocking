@@ -18,4 +18,5 @@ namespace Boids {
 
     void endSimulation();
     void unitTest();
+    void LabelingBoidWithGridCellIndexUnitTest();
 }
