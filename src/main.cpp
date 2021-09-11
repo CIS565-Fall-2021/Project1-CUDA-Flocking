@@ -14,12 +14,12 @@
 
 // LOOK-2.1 LOOK-2.3 - toggles for UNIFORM_GRID and COHERENT_GRID
 #define VISUALIZE 1
-#define UNIFORM_GRID 1
+#define UNIFORM_GRID 0
 #define COHERENT_GRID 0
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 50000;
-const float DT = 0.03f;
+const int N_FOR_VIS = 10000;
+const float DT = 0.2f;
 
 /**
 * C main function.
@@ -77,17 +77,18 @@ bool init(int argc, char **argv) {
     << std::endl;
     return false;
   }
-
+  // same as in LearnOpenGL
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
+  // width and height defined in main.hpp
   window = glfwCreateWindow(width, height, deviceName.c_str(), NULL, NULL);
   if (!window) {
     glfwTerminate();
     return false;
   }
+  // https://computergraphics.stackexchange.com/questions/4562/what-does-makecontextcurrent-do-exactly/4563
   glfwMakeContextCurrent(window);
   glfwSetKeyCallback(window, keyCallback);
   glfwSetCursorPosCallback(window, mousePositionCallback);

@@ -265,7 +265,11 @@ __device__ glm::vec3 computeCohesionGridApproach(int startIndex,
             perceived_center += pos[particleIndex];
         }
     }
-    perceived_center /= number_of_neighbors;
+    // check for zero ne
+    if (number_of_neighbors != 0)
+    {
+        perceived_center /= number_of_neighbors;
+    }
     return (perceived_center - pos[iSelf]) * rule1Scale;
 }
 
@@ -307,7 +311,11 @@ __device__ glm::vec3 computeAlignmentGridApproach(int startIndex,
             perceived_velocity += vel[particleIndex];
         }
     }
-    perceived_velocity /= number_of_neighbors;
+    // check for zero ne
+    if (number_of_neighbors != 0)
+    {
+        perceived_velocity /= number_of_neighbors;
+    }
     return perceived_velocity * rule3Scale;
 }
 
@@ -340,6 +348,11 @@ __device__ glm::vec3 computeCohesion(int N, int iSelf, const glm::vec3* pos,
             number_of_neighbors++;
             perceived_center += pos[i];
         }
+    }
+    if (number_of_neighbors == 0)
+    {
+        // doesn't affect this boid if there are no neighbors
+        return glm::vec3(0, 0, 0);
     }
     perceived_center /= number_of_neighbors;
     return (perceived_center - pos[iSelf]) * rule1Scale;
@@ -378,6 +391,11 @@ __device__ glm::vec3 computeAlignment(int N, int iSelf, const glm::vec3* pos,
             number_of_neighbors++;
             perceived_velocity += vel[i];
         }
+    }
+    if (number_of_neighbors == 0)
+    {
+        // doesn't affect this boid if there are no neighbors
+        return glm::vec3(0.0f, 0.0f, 0.0f);
     }
     perceived_velocity /= number_of_neighbors;
     return perceived_velocity * rule3Scale;
@@ -603,12 +621,24 @@ __global__ void kernUpdateVelNeighborSearchScattered(
         }
     }
 
-    perceived_velocity /= number_of_neighbors_velocity;
-    perceived_center /= number_of_neighbors_center;
-    glm::vec3 alignmentVelocity = perceived_velocity * rule3Scale;
-    glm::vec3 separationVelocity = c * rule2Scale;
-    glm::vec3 cohesionVelocity = (perceived_center - pos[index]) * rule1Scale;
+    glm::vec3 alignmentVelocity{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 separationVelocity{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 cohesionVelocity{ 0.0f, 0.0f, 0.0f };
 
+    if (number_of_neighbors_center != 0)
+    {
+        perceived_center /= number_of_neighbors_center;
+        cohesionVelocity = (perceived_center - pos[index]) * rule1Scale;
+    }
+
+    if (number_of_neighbors_velocity != 0)
+    {
+        perceived_velocity /= number_of_neighbors_velocity;
+        alignmentVelocity = perceived_velocity * rule3Scale;
+    }
+   
+    separationVelocity = c * rule2Scale;
+    
     // - Access each boid in the cell and compute velocity change from
     //   the boids rules, if this boid is within the neighborhood distance.
     glm::vec3 newVelocity = vel1[index] + alignmentVelocity
@@ -752,6 +782,30 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed. THIS MAY BE DIFFERENT FROM BEFORE.
+#if 0
+
+    dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
+    kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects,
+        gridSideCount,
+        gridMinimum,
+        gridInverseCellWidth,
+        dev_pos,
+        dev_particleArrayIndices,
+        dev_particleGridIndices);
+    dev_thrust_particleArrayIndices =
+        thrust::device_pointer_cast(dev_particleArrayIndices);
+    dev_thrust_particleGridIndices =
+        thrust::device_pointer_cast(dev_particleGridIndices);
+    thrust::sort_by_key(dev_thrust_particleGridIndices,
+        dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
+    dim3 fullBlocksPerGridCellArrays((gridCellCount + blockSize - 1) / blockSize);
+    kernResetIntBuffer << <fullBlocksPerGridCellArrays, blockSize >> > (gridCellCount,
+        dev_gridCellStartIndices, -1);
+    kernResetIntBuffer << <fullBlocksPerGridCellArrays, blockSize >> > (gridCellCount,
+        dev_gridCellEndIndices, -1);
+    kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects,
+        dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+# endif
 }
 
 void Boids::endSimulation() {
