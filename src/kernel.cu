@@ -473,6 +473,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	int iSelf = particleArrayIndices[index];
 	glm::vec3 boidPos = pos[iSelf];
+	int boidPos_x = boidPos.x;
 
 	// Identify the grid cell that this particle is in
 	int gridCell_x = floor((boidPos.x - gridMin.x) * inverseCellWidth);
@@ -483,9 +484,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	// get offsets from current cell to find 8 potential neighbor cells
 	float neighborhood = cellWidth / 2.f;
 	// based on quadrant boid is in, cell offset will be -1 or 1 in each dimension
-	int x_offset = boidPos.x < gridCell_x * cellWidth + neighborhood ? -1 : 1;
-	int y_offset = boidPos.y < gridCell_y * cellWidth + neighborhood ? -1 : 1;
-	int z_offset = boidPos.z < gridCell_z * cellWidth + neighborhood ? -1 : 1;
+	int x_offset = boidPos.x - gridCell_x < neighborhood ? -1 : 1;
+	int y_offset = boidPos.y - gridCell_y < neighborhood ? -1 : 1;
+	int z_offset = boidPos.z - gridCell_z < neighborhood ? -1 : 1;
 
 	// compute the velocity change given all potential neighboring cells
 	glm::vec3 newVel = computeVelocityChangeGrid(x_offset, y_offset, z_offset, gridCell, gridCellStartIndices, gridCellEndIndices,
@@ -516,7 +517,7 @@ __device__ glm::vec3 computeVelocityChangeCoherent(
 
 	// iterate through 8 potential neighbor cells
 	// x, y, z serve as offsets to current grid cell
-	/*for (int z = z_start; z < z_start + 2; z++) {
+	for (int z = z_start; z < z_start + 2; z++) {
 		for (int y = y_start; y < y_start + 2; y++) {
 			for (int x = x_start; x < x_start + 2; x++) {
 				int neighborCell = gridCell + gridIndex3Dto1D(x, y, z, gridResolution);
@@ -543,41 +544,6 @@ __device__ glm::vec3 computeVelocityChangeCoherent(
 							cohesion += neighborVel;
 						}
 					}
-				}
-			}
-		}
-	}*/
-
-	// there are 8 potential neighbor cells
-	for (int i = 0; i < 8; i++) {
-		// find neighbor cell from offset
-		// following calculations set up to go through all combinations of offsets
-		int cell_x = i < 4 ? 0 : x_start;
-		int cell_y = i % 2 == 0 ? y_start : 0;
-		int cell_z = i > 1 && i < 6 ? z_start : 0;
-		int neighborCell = gridCell + gridIndex3Dto1D(cell_x, cell_y, cell_z, gridResolution);
-
-		// if neighbor cell exists, iterate over boids inside
-		if (neighborCell >= 0 && neighborCell < gridCellCount) {
-			int startIndex = startIndices[neighborCell];
-			int endIndex = endIndices[neighborCell];
-
-			for (int j = startIndex; j < endIndex + 1; j++) {
-				if (j == iSelf) continue;
-
-				const glm::vec3 &neighborPos = pos[j];
-				const glm::vec3 &neighborVel = vel[j];
-
-				// if neighbor boid is in neighborhood, perform flocking calcs
-				float distance = glm::distance(neighborPos, boidPos);
-				if (distance < rule1Distance) {
-					center += neighborPos;
-					neighborCount++;
-
-					if (distance < rule2Distance) {
-						separate -= (neighborPos - boidPos);
-					}
-					cohesion += neighborVel;
 				}
 			}
 		}
@@ -623,9 +589,9 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	// get offsets from current cell to find 8 potential neighbor cells
 	float neighborhood = cellWidth / 2.f;
 	// based on quadrant boid is in, cell start will be the cur cell_dim offset either by -1 or 0
-	int x_start = boidPos.x < gridCell_x * cellWidth + neighborhood ? -1 : 1; // CHANGE BACK TO 0
-	int y_start = boidPos.y < gridCell_y * cellWidth + neighborhood ? -1 : 1;
-	int z_start = boidPos.z < gridCell_z * cellWidth + neighborhood ? -1 : 1;
+	int x_start = boidPos.x - gridCell_x < neighborhood ? -1 : 0; 
+	int y_start = boidPos.y - gridCell_y < neighborhood ? -1 : 0;
+	int z_start = boidPos.z - gridCell_z < neighborhood ? -1 : 0;
 
 	// compute the velocity change given all potential neighboring cells
 	glm::vec3 newVel = computeVelocityChangeCoherent(x_start, y_start, z_start, gridCell, gridCellStartIndices, gridCellEndIndices,
@@ -636,6 +602,9 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 		newVel = (newVel / speed) * maxSpeed;
 	}
 
+	float newVel_x = newVel.x;
+	float newVel_y = newVel.y;
+	float newVel_z = newVel.z;
 	vel2[index] = newVel;
 }
 
@@ -747,7 +716,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 		 dev_gridCellEndIndices, dev_sortedPos, dev_sortedVel1, dev_vel2);
 
 	// sort vel2 so that it's in boid order again
-	thrust::sort_by_key(dev_thrust_particleArrayIndices, dev_thrust_particleArrayIndices + 5, dev_thrust_vel2);
+	thrust::sort_by_key(dev_thrust_particleArrayIndices, dev_thrust_particleArrayIndices + numObjects, dev_thrust_vel2);
 
 	// Update positions
 	kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
