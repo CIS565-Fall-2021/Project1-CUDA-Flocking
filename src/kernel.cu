@@ -1280,13 +1280,16 @@ void Boids::stepSimulationCoherentGrid(float dt) {
     kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt,
         dev_pos_new, dev_vel1_new);
 
-
-
     // - Ping-pong buffers as needed
+    glm::vec3* temp = dev_pos;
     dev_pos = dev_pos_new;
-    dev_vel1 = dev_vel1_new;
+    dev_pos_new = temp;
 
-    glm::vec3* temp = dev_vel2;
+    temp = dev_vel1;
+    dev_vel1 = dev_vel1_new;
+    dev_vel1_new = temp;
+
+    temp = dev_vel2;
     dev_vel2 = dev_vel1;
     dev_vel1 = temp;
 }
