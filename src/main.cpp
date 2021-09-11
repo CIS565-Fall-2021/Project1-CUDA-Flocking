@@ -14,12 +14,15 @@
 
 // LOOK-2.1 LOOK-2.3 - toggles for UNIFORM_GRID and COHERENT_GRID
 #define VISUALIZE 1
-#define UNIFORM_GRID 1
-#define COHERENT_GRID 1
+#define UNIFORM_GRID 0
+#define COHERENT_GRID 0
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
 const int N_FOR_VIS = 5000;
 const float DT = 0.2f;
+
+unsigned long long fps_cum_sum;
+unsigned long long fps_cum_cnt;
 
 /**
 * C main function.
@@ -255,9 +258,15 @@ void initShaders(GLuint * program) {
 
       glfwSwapBuffers(window);
       #endif
+
+      fps_cum_sum += (unsigned long long) fps;
+      fps_cum_cnt++;
     }
     glfwDestroyWindow(window);
     glfwTerminate();
+
+    unsigned long long avg_fps = fps_cum_sum / fps_cum_cnt;
+    std::cout << "Avg FPS: " << avg_fps << std::endl;
   }
 
 
