@@ -35,7 +35,7 @@ void checkCUDAError(const char *msg, int line = -1) {
 /**
 * Return the distance between two boids
 */
-__device__ float distanceBoid(const glm::vec3& firstBoid, const glm::vec3& secondBoid)
+__host__ __device__ float distanceBoid(const glm::vec3& firstBoid, const glm::vec3& secondBoid)
 {
     return glm::length(firstBoid - secondBoid);
 }
@@ -197,6 +197,11 @@ void Boids::initSimulation(int N) {
 
   cudaMalloc((void**)&dev_vel1_new, N * sizeof(glm::vec3));
   checkCUDAErrorWithLine("cudaMalloc dev_pos failed!");
+
+  dev_thrust_particleArrayIndices =
+      thrust::device_pointer_cast(dev_particleArrayIndices);
+  dev_thrust_particleGridIndices =
+      thrust::device_pointer_cast(dev_particleGridIndices);
 
   cudaDeviceSynchronize();
 }
@@ -1152,18 +1157,6 @@ void Boids::stepSimulationNaive(float dt) {
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {
-#if 0
-    PrintCellStats();
-    LabelingBoidWithGridCellIndexUnitTest();
-    LabelingBoidWithIndexUnitTest();
-    LabelingBoidWithGridCellIndexUnitTest();
-    LabelingBoidWithIndexUnitTest();
-    SortingUnitTest();
-    StartEndUnitTest();
-    SortingUnitTest();
-    StartEndUnitTest();
-#endif
-
     assert(numObjects >= 0);
     dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
   // TODO-2.1
@@ -1183,10 +1176,6 @@ void Boids::stepSimulationScatteredGrid(float dt) {
     
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
-    dev_thrust_particleArrayIndices =
-        thrust::device_pointer_cast(dev_particleArrayIndices);
-    dev_thrust_particleGridIndices =
-        thrust::device_pointer_cast(dev_particleGridIndices);
     thrust::sort_by_key(dev_thrust_particleGridIndices,
         dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 
@@ -1256,10 +1245,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
         dev_pos,
         dev_particleArrayIndices,
         dev_particleGridIndices);
-    dev_thrust_particleArrayIndices =
-        thrust::device_pointer_cast(dev_particleArrayIndices);
-    dev_thrust_particleGridIndices =
-        thrust::device_pointer_cast(dev_particleGridIndices);
     thrust::sort_by_key(dev_thrust_particleGridIndices,
         dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
     dim3 fullBlocksPerGridCellArrays((gridCellCount + blockSize - 1) / blockSize);
