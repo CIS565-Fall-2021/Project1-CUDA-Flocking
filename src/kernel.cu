@@ -352,10 +352,21 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
 __global__ void kernComputeIndices(int N, int gridResolution,
   glm::vec3 gridMin, float inverseCellWidth,
   glm::vec3 *pos, int *indices, int *gridIndices) {
+
+  int threadi = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if (threadi < N){
+		glm::vec3 gridPos = (pos[threadi] - gridMin) * inverseCellWidth;
+
     // TODO-2.1
     // - Label each boid with the index of its grid cell.
+		gridIndices[threadi] = gridIndex3Dto1D((int)gridPos.x,
+																					 (int)gridPos.y,
+																					 (int)gridPos.z,
+																					 gridResolution);
     // - Set up a parallel array of integer indices as pointers to the actual
     //   boid data in pos and vel1/vel2
+		indices[threadi] = threadi;
+  }
 }
 
 // LOOK-2.1 Consider how this could be useful for indicating that a cell
@@ -373,6 +384,7 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   // Identify the start point of each cell in the gridIndices array.
   // This is basically a parallel unrolling of a loop that goes
   // "this index doesn't match the one before it, must be a new cell!"
+
 }
 
 __global__ void kernUpdateVelNeighborSearchScattered(
@@ -425,21 +437,6 @@ void Boids::stepSimulationNaive(float dt) {
   dev_vel1 = dev_vel2;
   dev_vel2 = tmp;
   cudaDeviceSynchronize();
-}
-
-void Boids::sortBoidsByGridCell(int N ){
-
-  //dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
-  // How to copy data to the GPU
-  //cudaMemcpy(dev_particleArrayIndices, intKeys.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
-  //cudaMemcpy(dev_intValues, intValues.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
-
-
-  // How to copy data back to the CPU side from the GPU
-  //cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
-  //cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
-  //checkCUDAErrorWithLine("memcpy back failed!");
-
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {

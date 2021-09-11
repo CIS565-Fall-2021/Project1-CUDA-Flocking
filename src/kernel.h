@@ -14,7 +14,6 @@ namespace Boids {
     void stepSimulationNaive(float dt);
     void stepSimulationScatteredGrid(float dt);
     void stepSimulationCoherentGrid(float dt);
-    void sortBoidsByGridCell(int N);
     void copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities);
 
     void endSimulation();
