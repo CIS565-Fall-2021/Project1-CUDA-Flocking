@@ -427,36 +427,46 @@ void Boids::stepSimulationNaive(float dt) {
   cudaDeviceSynchronize();
 }
 
-void Boids::sortBoidsByGridCell(int N){
+void Boids::sortBoidsByGridCell(int N ){
 
   //dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
-	/*
   // How to copy data to the GPU
-  cudaMemcpy(dev_particleArrayIndices, intKeys.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
-  cudaMemcpy(dev_intValues, intValues.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
+  //cudaMemcpy(dev_particleArrayIndices, intKeys.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
+  //cudaMemcpy(dev_intValues, intValues.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
 
-  // Wrap device vectors in thrust iterators for use with thrust.
-  thrust::device_ptr<int> dev_thrust_keys(dev_intKeys);
-  thrust::device_ptr<int> dev_thrust_values(dev_intValues);
-  // LOOK-2.1 Example for using thrust::sort_by_key
-  thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + N, dev_thrust_values);
 
   // How to copy data back to the CPU side from the GPU
-  cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
-  cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
-  checkCUDAErrorWithLine("memcpy back failed!");
+  //cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
+  //cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
+  //checkCUDAErrorWithLine("memcpy back failed!");
 
-  */
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {
   // TODO-2.1
   // Uniform Grid Neighbor search using Thrust sort.
   // In Parallel:
+	kernResetIntBuffer<<<numObjects, blockSize>>>(numObjects,
+																								dev_particleGridIndices,
+																								-1);
+
   // - label each particle with its array index as well as its grid index.
   //   Use 2x width grids.
+	kernComputeIndices<<<numObjects, blockSize>>>(numObjects,
+																								gridSideCount,
+																								gridMinimum,
+																								gridInverseCellWidth,
+																								dev_pos,
+																								dev_particleArrayIndices,
+																								dev_particleGridIndices);
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
+  // Wrap device vectors in thrust iterators for use with thrust.
+  dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
+  dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
+  thrust::sort_by_key(dev_thrust_particleGridIndices,
+  										dev_thrust_particleGridIndices + numObjects,
+											dev_thrust_particleArrayIndices);
 
   // - Naively unroll the loop for finding the start and end indices of each
   //   cell's data pointers in the array of boid indices
@@ -485,6 +495,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   glm::vec3 *tmp = dev_vel1;
   dev_vel1 = dev_vel2;
   dev_vel2 = tmp;
+
   cudaDeviceSynchronize();
 }
 
