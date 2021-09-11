@@ -460,6 +460,46 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
     }
 }
 
+__device__ void computeContributionFromThisCell(int x, int y, int z, int index,
+    glm::vec3& perceived_velocity, glm::vec3& perceived_center, int gridResolution,
+    glm::vec3& c, int& number_of_neighbors_velocity, int& number_of_neighbors_center,
+    int* gridCellStartIndices, int* gridCellEndIndices,
+    int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1)
+{
+    int cellIndex = gridIndex3Dto1D(x, y, z, gridResolution);
+    int startIndex = gridCellStartIndices[cellIndex];
+    int endIndex = gridCellEndIndices[cellIndex];
+
+    // - For each cell, read the start/end indices in the boid pointer array.
+    if ((startIndex != -1) && (endIndex != -1))
+    {
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            int particleIndex = particleArrayIndices[i];
+            if (particleIndex != index)
+            {
+                float distanceThisBoidAndNeig = distanceBoid(pos[index], pos[particleIndex]);
+                if (distanceThisBoidAndNeig < rule3Distance)
+                {
+                    number_of_neighbors_velocity++;
+                    perceived_velocity += vel1[particleIndex];
+                }
+
+                if (distanceThisBoidAndNeig < rule2Distance)
+                {
+                    c -= (pos[particleIndex] - pos[index]);
+                }
+
+                if (distanceThisBoidAndNeig < rule1Distance)
+                {
+                    number_of_neighbors_center++;
+                    perceived_center += pos[particleIndex];
+                }
+            }
+        }
+    }
+}
+
 __global__ void kernUpdateVelNeighborSearchScattered(
   int N, int gridResolution, glm::vec3 gridMin,
   float inverseCellWidth, float cellWidth,
@@ -484,55 +524,232 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     int iY = glm::floor((pos[index].y - gridMin.y) * inverseCellWidth);
     int iZ = glm::floor((pos[index].z - gridMin.z) * inverseCellWidth);
 
+    int cubeCornerX = iX * cellWidth + gridMin.x;
+    int cubeCornerY = iY * cellWidth + gridMin.y;
+    int cubeCornerZ = iZ * cellWidth + gridMin.z;
+
+    float cellMiddleLineX = cubeCornerX + cellWidth / 2.0f;
+    float cellMiddleLineY = cubeCornerY + cellWidth / 2.0f;
+    float cellMiddleLineZ = cubeCornerZ + cellWidth / 2.0f;
+
     glm::vec3 perceived_velocity{ 0.0f, 0.0f, 0.0f };
     glm::vec3 perceived_center{ 0.0f, 0.0f, 0.0f };
     glm::vec3 c{ 0.0f, 0.0f, 0.0f };
     int number_of_neighbors_velocity{ 0 };
     int number_of_neighbors_center{ 0 };
 
-    for (int i = iZ - 1; i <= iZ + 1; i++)
+
+    bool cellInLeftSideX = pos[index].x < cellMiddleLineX;
+    bool cellInUpperPartY = pos[index].y < cellMiddleLineY;
+    bool cellInLowerPartZ = pos[index].z < cellMiddleLineX;
+
+    // Always check the cell the particle is in 
+    computeContributionFromThisCell(iX, iY, iZ, index,
+        perceived_velocity, perceived_center, gridResolution,
+        c, number_of_neighbors_velocity, number_of_neighbors_center,
+        gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+        pos, vel1);
+    if (cellInLowerPartZ)
     {
-        for (int j = iY - 1; j <= iY + 1; j++)
+        computeContributionFromThisCell(iX, iY, iZ - 1, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+    }
+    else {
+        computeContributionFromThisCell(iX, iY, iZ + 1, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+    }
+
+
+    if (cellInLeftSideX)
+    {
+        computeContributionFromThisCell(iX - 1, iY, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
         {
-            for (int k = iX - 1; k <= iX + 1; k++)
-            {
-                // going through 27 cells is not necessary (NEED CHANGE!)
-                int cellIndex = gridIndex3Dto1D(k, j, i, gridResolution);
-                int startIndex = gridCellStartIndices[cellIndex];
-                int endIndex = gridCellEndIndices[cellIndex];
-
-                // - For each cell, read the start/end indices in the boid pointer array.
-                if ((startIndex != -1) && (endIndex != -1))
-                {
-                    for (int i = startIndex; i <= endIndex; i++)
-                    {
-                        int particleIndex = particleArrayIndices[i];
-                        if (particleIndex != index)
-                        {
-                            float distanceThisBoidAndNeig = distanceBoid(pos[index], pos[particleIndex]);
-                            if (distanceThisBoidAndNeig < rule3Distance)
-                            {
-                                number_of_neighbors_velocity++;
-                                perceived_velocity += vel1[particleIndex];
-                            }
-
-                            if (distanceThisBoidAndNeig < rule2Distance)
-                            {
-                                c -= (pos[particleIndex] - pos[index]);
-                            }
-
-                            if (distanceThisBoidAndNeig < rule1Distance)
-                            {
-                                number_of_neighbors_center++;
-                                perceived_center += pos[particleIndex];
-                            }
-                        }                        
-                    }
-
-                }
-            }
+            computeContributionFromThisCell(iX - 1, iY, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX - 1, iY, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
         }
     }
+    else {
+        computeContributionFromThisCell(iX + 1, iY, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX + 1, iY, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX + 1, iY, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+
+    if (cellInUpperPartY)
+    {
+        computeContributionFromThisCell(iX, iY - 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX, iY - 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX, iY - 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+    else {
+        computeContributionFromThisCell(iX, iY + 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX, iY + 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX, iY + 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+
+    if (cellInLeftSideX && cellInUpperPartY)
+    {
+        computeContributionFromThisCell(iX - 1, iY - 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX - 1, iY - 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX - 1, iY - 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+    else if (cellInLeftSideX && !cellInUpperPartY)
+    {
+        computeContributionFromThisCell(iX - 1, iY + 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX - 1, iY + 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX - 1, iY + 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+    else if (!cellInLeftSideX && cellInUpperPartY)
+    {
+        computeContributionFromThisCell(iX + 1, iY - 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX + 1, iY - 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX + 1, iY - 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+    else {
+        computeContributionFromThisCell(iX + 1, iY + 1, iZ, index,
+            perceived_velocity, perceived_center, gridResolution,
+            c, number_of_neighbors_velocity, number_of_neighbors_center,
+            gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+            pos, vel1);
+        if (cellInLowerPartZ)
+        {
+            computeContributionFromThisCell(iX + 1, iY + 1, iZ - 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+        else {
+            computeContributionFromThisCell(iX + 1, iY + 1, iZ + 1, index,
+                perceived_velocity, perceived_center, gridResolution,
+                c, number_of_neighbors_velocity, number_of_neighbors_center,
+                gridCellStartIndices, gridCellEndIndices, particleArrayIndices,
+                pos, vel1);
+        }
+    }
+
 
     glm::vec3 alignmentVelocity{ 0.0f, 0.0f, 0.0f };
     glm::vec3 separationVelocity{ 0.0f, 0.0f, 0.0f };
