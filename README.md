@@ -9,6 +9,17 @@ Project 1 - Flocking**
 This project involved implementing several algorithms to simulate movements of Boid particles. We started off with a naive implementation, then made optimizations to improve parallelism and reduce the number of memory accesses.
 
 # Screenshots
+Video
+<br>
+<img src="images/RunningBoid.gif" width="750">
+
+Early in execution
+<br>
+<img src="images/RunningBoidEarly.png" width="750">
+
+Later on in execution
+<br>
+<img src="images/RunningBoidLate.png" width="750">
 
 # Functionality
 Boids move according to three rules. These were implemented across threads to allow for a level of parallelism across GPU cores.
