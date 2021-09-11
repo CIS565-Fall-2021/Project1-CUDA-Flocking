@@ -169,6 +169,13 @@ void Boids::initSimulation(int N) {
   gridMinimum.z -= halfGridWidth;
 
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
+	cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
+
+	cudaMalloc((void**)&dev_gridCellStartIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_gridCellEndIndices, N * sizeof(int));
+
+
   cudaDeviceSynchronize();
 }
 
@@ -269,15 +276,19 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 			perceivedVel += vel[i];
 		}
 	}
-	//if (rule1Neighbors > 0){
+
+	// --- assign/scale rule velocities
+
+	// we have to avoid a division by zero issue with rule1
+	if (rule1Neighbors > 0){
 		CM /= (float)rule1Neighbors;	// divide by the number of boids
 		rule1Vel = (CM - pos[iSelf]) * rule1Scale;
-	//}
-	//else{
-	//	rule1Vel = glm::vec3(0.0f);
-	//}
+	}
+	else{
+		rule1Vel = glm::vec3(0.0f);
+	}
 	rule2Vel = c * rule2Scale;
-	rule3Vel = perceivedVel * rule3Scale;
+	rule3Vel = (perceivedVel - vel[iSelf]) / 8.0f;// * rule3Scale;
 
 	return vel[iSelf] + rule1Vel + rule2Vel + rule3Vel;
 }
@@ -378,6 +389,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   // - Access each boid in the cell and compute velocity change from
   //   the boids rules, if this boid is within the neighborhood distance.
   // - Clamp the speed change before putting the new speed in vel2
+
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
@@ -415,6 +427,28 @@ void Boids::stepSimulationNaive(float dt) {
   cudaDeviceSynchronize();
 }
 
+void Boids::sortBoidsByGridCell(int N){
+
+  //dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
+	/*
+  // How to copy data to the GPU
+  cudaMemcpy(dev_particleArrayIndices, intKeys.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
+  cudaMemcpy(dev_intValues, intValues.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
+
+  // Wrap device vectors in thrust iterators for use with thrust.
+  thrust::device_ptr<int> dev_thrust_keys(dev_intKeys);
+  thrust::device_ptr<int> dev_thrust_values(dev_intValues);
+  // LOOK-2.1 Example for using thrust::sort_by_key
+  thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + N, dev_thrust_values);
+
+  // How to copy data back to the CPU side from the GPU
+  cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
+  cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
+  checkCUDAErrorWithLine("memcpy back failed!");
+
+  */
+}
+
 void Boids::stepSimulationScatteredGrid(float dt) {
   // TODO-2.1
   // Uniform Grid Neighbor search using Thrust sort.
@@ -423,11 +457,35 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   //   Use 2x width grids.
   // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
   //   are welcome to do a performance comparison.
+
   // - Naively unroll the loop for finding the start and end indices of each
   //   cell's data pointers in the array of boid indices
+	kernIdentifyCellStartEnd<<<numObjects,blockSize>>>(numObjects,
+																										 dev_particleGridIndices,
+																										 dev_gridCellStartIndices,
+																										 dev_gridCellEndIndices);
+  checkCUDAErrorWithLine("kernIdentifyCellStartEnd failed!");
   // - Perform velocity updates using neighbor search
+  kernUpdateVelNeighborSearchScattered<<<numObjects, blockSize>>>(numObjects,
+  																																gridSideCount,
+																																	gridMinimum,
+																																	gridInverseCellWidth,
+																																	gridCellWidth,
+																																	dev_gridCellStartIndices,
+																																	dev_gridCellEndIndices,
+																																	dev_particleArrayIndices,
+																																	dev_pos,
+																																	dev_vel1,
+																																	dev_vel2);
+  checkCUDAErrorWithLine("kernUpdateVelocityNeighborSearchScattered failed!");
   // - Update positions
+  kernUpdatePos<<<numObjects, blockSize>>>(numObjects, dt, dev_pos, dev_vel1);
+  checkCUDAErrorWithLine("kernUpdatePos failed!");
   // - Ping-pong buffers as needed
+  glm::vec3 *tmp = dev_vel1;
+  dev_vel1 = dev_vel2;
+  dev_vel2 = tmp;
+  cudaDeviceSynchronize();
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
@@ -454,6 +512,11 @@ void Boids::endSimulation() {
   cudaFree(dev_pos);
 
   // TODO-2.1 TODO-2.3 - Free any additional buffers here.
+	cudaFree(dev_particleArrayIndices);
+	cudaFree(dev_particleGridIndices);
+
+	cudaFree(dev_gridCellStartIndices);
+	cudaFree(dev_gridCellEndIndices);
 }
 
 void Boids::unitTest() {
