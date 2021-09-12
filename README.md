@@ -12,7 +12,7 @@ A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>, al
 
 ## Hightlight
 
-<img src="images/outsideCube.gif" alt="Logo" width="640" height="360">
+<img src="images/outSideCube.gif" alt="Logo" width="640" height="360">
 <img src="images/insideCube.gif" alt="Logo" width="640" height="360">
 
 Stats: 
