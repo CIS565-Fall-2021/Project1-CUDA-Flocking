@@ -437,13 +437,65 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
 
 }
 
-__device__ glm::vec3 computeVelocityChange2(int iSelf, int StartIndex, int EndIndex,
-	int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1) 
+//__device__ glm::vec3 computeCenter(int iSelf, int StartIndex, int EndIndex, int * neighborCount,
+//	int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1)
+//{
+//	glm::vec3 center = glm::vec3(0, 0, 0);
+//	glm::vec3 seperation = glm::vec3(0, 0, 0);
+//	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
+//
+//	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
+//
+//	for (int i = StartIndex; i <= EndIndex; i++)
+//	{
+//		if (particleArrayIndices[i] == iSelf)
+//		{
+//			continue;
+//		}
+//
+//		float distance = glm::distance(pos[iSelf], pos[particleArrayIndices[i]]);
+//
+//		// Rule 1(Cohesion): boids fly towards their local perceived center of mass, which excludes themselves
+//		if (distance < rule1Distance)
+//		{
+//			center += pos[particleArrayIndices[i]];
+//			neighborCount += 1.0;
+//		}
+//	}
+//	return center;
+//}
+//
+//__device__ glm::vec3 computeSeparation(int iSelf, int StartIndex, int EndIndex, int* neighborCount,
+//	int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1)
+//{
+//	glm::vec3 center = glm::vec3(0, 0, 0);
+//	glm::vec3 seperation = glm::vec3(0, 0, 0);
+//	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
+//
+//	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
+//
+//	for (int i = StartIndex; i <= EndIndex; i++)
+//	{
+//		if (particleArrayIndices[i] == iSelf)
+//		{
+//			continue;
+//		}
+//
+//		float distance = glm::distance(pos[iSelf], pos[particleArrayIndices[i]]);
+//
+//		// Rule 1(Cohesion): boids fly towards their local perceived center of mass, which excludes themselves
+//		if (distance < rule1Distance)
+//		{
+//			center += pos[particleArrayIndices[i]];
+//			neighborCount += 1.0;
+//		}
+//	}
+//	return center;
+//}
+
+__device__ void computeVelocityChange2(int iSelf, int StartIndex, int EndIndex, int &neighborCount, glm::vec3 &center, glm::vec3 &seperation,
+	glm::vec3 &perceived_velocity,int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1)
 {
-	int neighborCount = 0;
-	glm::vec3 center = glm::vec3(0, 0, 0);
-	glm::vec3 seperation = glm::vec3(0, 0, 0);
-	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
 
 	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
 
@@ -475,17 +527,6 @@ __device__ glm::vec3 computeVelocityChange2(int iSelf, int StartIndex, int EndIn
 			perceived_velocity += vel1[particleArrayIndices[i]];
 		}
 	}
-
-	if (neighborCount > 0) {
-		center = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
-		resultVel2 += (center - pos[iSelf]) * rule1Scale;
-
-		resultVel2 += perceived_velocity * rule3Scale;
-	}
-
-	resultVel2 += seperation * rule2Scale;
-
-	return resultVel2;
 }
 
 //__device__ void populateArray(int neightbourIdx, thrust::device_vector<int>& arrayIndices,
@@ -515,6 +556,13 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
+
+	int neighborCount = 0;
+	glm::vec3 center = glm::vec3(0, 0, 0);
+	glm::vec3 seperation = glm::vec3(0, 0, 0);
+	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
+
+
 	glm::vec3 currPos = pos[index];
 
 	// Identify Grid Cell
@@ -526,17 +574,14 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	int currGridIdx = gridIndex3Dto1D(iX, iY, iZ, gridResolution);
 	glm::vec3 currGridPos = glm::vec3(gridMin.x + iX * cellWidth, gridMin.y + iY * cellWidth, gridMin.z + iZ * cellWidth);
-	
-	int numberOfResultants = 0;
-	glm::vec3 resVelocity = glm::vec3(0, 0, 0);
+
 	
 	//Identify Neighbours
 
 	//check Curr Grid
 
-	resVelocity += computeVelocityChange2(index, currGridIdx, currGridIdx,
+	computeVelocityChange2(index, currGridIdx, currGridIdx, neighborCount, center, seperation, perceived_velocity,
 		particleArrayIndices, pos, vel1);
-	numberOfResultants += 1;
 
 
 	//First Identify region
@@ -546,23 +591,20 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
 		checkiY = iY;
 		checkiZ = iZ;
-		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX >= 0 && checkiX <= gridResolution - 1) && (checkiY >= 0 && checkiY <= gridResolution - 1) && (checkiZ >= 0 && checkiZ <= gridResolution - 1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
 				particleArrayIndices, pos, vel1);
-			numberOfResultants += 1;
 		}
-
 		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
 		checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
 				particleArrayIndices, pos, vel1);
-			numberOfResultants += 1;
 		}
 
 		checkiX = iX;
@@ -571,9 +613,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
 				particleArrayIndices, pos, vel1);
-			numberOfResultants += 1;
 		}
 
 		//check Curr Grid
@@ -591,8 +632,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
-					
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -601,7 +642,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -610,7 +652,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -619,7 +662,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 			}
@@ -631,7 +675,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -640,7 +685,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -649,7 +695,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -658,7 +705,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -672,7 +720,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -681,7 +730,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -690,7 +740,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -699,11 +750,12 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
-		if (iZ == 0)
+		else
 		{
 			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
 			{
@@ -713,7 +765,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -722,7 +775,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -731,7 +785,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -740,7 +795,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -756,7 +812,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -765,7 +822,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = iX;
@@ -774,7 +832,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		//check Curr Grid
@@ -792,7 +851,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -801,7 +861,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -810,7 +871,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -819,7 +881,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 			}
@@ -831,7 +894,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -840,7 +904,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -849,7 +914,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -858,7 +924,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -872,7 +939,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -881,7 +949,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -890,7 +959,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -899,11 +969,12 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
-		if (iZ == 0)
+		else
 		{
 			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
 			{
@@ -913,7 +984,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -922,7 +994,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -931,7 +1004,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -940,7 +1014,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -955,7 +1030,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -964,7 +1040,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = iX;
@@ -973,7 +1050,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		//check Curr Grid
@@ -991,7 +1069,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1000,7 +1079,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1009,7 +1089,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1018,7 +1099,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 			}
@@ -1030,7 +1112,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1039,7 +1122,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1048,7 +1132,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1057,7 +1142,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -1071,7 +1157,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1080,7 +1167,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1089,7 +1177,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1098,11 +1187,12 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
-		if (iZ == 0)
+		else 
 		{
 			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
 			{
@@ -1112,7 +1202,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1121,7 +1212,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1130,7 +1222,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1139,14 +1232,15 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
 	}
 
-	//region4
-	else if (currPos.x >= (currGridPos.x + (cellWidth / 2)) && currPos.y >=(currGridPos.y + (cellWidth / 2)))
+	////region4
+	else
 	{
 		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
 		checkiY = iY;
@@ -1154,7 +1248,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1163,7 +1258,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		checkiX = iX;
@@ -1172,7 +1268,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 		{
 			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-			resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+			computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+				particleArrayIndices, pos, vel1);
 		}
 
 		//check Curr Grid
@@ -1190,7 +1287,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1199,7 +1297,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1208,7 +1307,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1217,7 +1317,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 			}
@@ -1229,7 +1330,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1238,7 +1340,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1247,7 +1350,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1256,7 +1360,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -1270,7 +1375,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1279,7 +1385,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1288,7 +1395,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1297,7 +1405,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
@@ -1311,7 +1420,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1320,7 +1430,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1329,7 +1440,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 
 				checkiX = iX;
@@ -1338,18 +1450,27 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX>=0 && checkiX <=gridResolution-1) && (checkiY>=0 && checkiY <=gridResolution-1) && (checkiZ>=0 && checkiZ <=gridResolution-1))
 				{
 					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
-					resVelocity += computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx],particleArrayIndices, pos, vel1); numberOfResultants += 1;
+					computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCount, center, seperation, perceived_velocity,
+						particleArrayIndices, pos, vel1);
 				}
 			}
 		}
 	}
 
-	/*glm::vec3 newVelocity = glm::vec3(resVelocity.x / numberOfResultants, resVelocity.y / numberOfResultants, 
-		resVelocity.z / numberOfResultants);*/
+glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
+if (neighborCount > 0) {
+	center = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
+	resultVel2 += (center - pos[index]) * rule1Scale;
+
+	resultVel2 += perceived_velocity * rule3Scale;
+}
+
+resultVel2 += seperation * rule2Scale;
+
+
 	//Clamp
-	glm::vec3 newVelocity = resVelocity;
-	newVelocity = glm::clamp(newVelocity, -1 * maxSpeed, maxSpeed);
-	vel2[index] = newVelocity;
+    resultVel2 = glm::clamp(resultVel2, -1 * maxSpeed, maxSpeed);
+	vel2[index] = resultVel2;
 
 
 }
