@@ -45,11 +45,11 @@ void checkCUDAError(const char *msg, int line = -1) {
 #define rule2Distance 3.0f
 #define rule3Distance 5.0f
 
-#define rule1Scale 0.008f
+#define rule1Scale 0.01f
 #define rule2Scale 0.1f
-#define rule3Scale 0.01f
+#define rule3Scale 0.1f
 
-#define maxSpeed 10.0f
+#define maxSpeed 1.0f
 
 /*! Size of the starting area in simulation space. */
 #define scene_scale 100.0f
@@ -70,6 +70,9 @@ dim3 fullBlocksPerGrid;
 glm::vec3 *dev_pos;
 glm::vec3 *dev_vel1;
 glm::vec3 *dev_vel2;
+
+// used to reorder the position buffer for 2.3
+glm::vec3* dev_pos2;
 
 // LOOK-2.1 - these are NOT allocated for you. You'll have to set up the thrust
 // pointers on your own too.
@@ -163,11 +166,11 @@ void Boids::initSimulation(int N) {
   kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects,
     dev_pos, scene_scale);
   checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
-
+  /*
   kernGenerateRandomVelArray << <fullBlocksPerGrid, blockSize >> > (2, numObjects,
     dev_vel1);
   checkCUDAErrorWithLine("kernGenerateRandomVelArray failed!");
-
+  */
   // LOOK-2.1 computing grid params
   gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
@@ -181,6 +184,9 @@ void Boids::initSimulation(int N) {
   gridMinimum.z -= halfGridWidth;
 
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
+  cudaMalloc((void**)&dev_pos2, N * sizeof(glm::vec3));
+  checkCUDAErrorWithLine("cudaMalloc dev_pos2 failed!");
+
   cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
 
@@ -351,7 +357,7 @@ __device__ glm::vec3 evaluateVelocityCalculationInfo(VelocityCalculationInfo& ca
 
   if (calculationInfo.perceivedVelocityNeighbors > 0) {
     calculationInfo.perceivedVelocity /= calculationInfo.perceivedVelocityNeighbors;
-    result += rule3Scale * (calculationInfo.perceivedVelocity - calculationInfo.selfVel);
+    result += rule3Scale * (calculationInfo.perceivedVelocity);// -calculationInfo.selfVel);
   }
 
   return result;
@@ -453,6 +459,18 @@ __global__ void kernResetIntBuffer(int N, int *intBuffer, int value) {
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if (index < N) {
     intBuffer[index] = value;
+  }
+}
+
+/**
+* Reorders the input buffer as prescribed by the indices and moves it into
+* the output buffer.
+*/
+template <typename T>
+__global__ void kernArrangeBuffer(int N, const int* indices, T* in, T* out) {
+  int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if (index >= 0 && index < N) {
+    out[index] = std::move(in[indices[index]]);
   }
 }
 
@@ -568,6 +586,67 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   // - Access each boid in the cell and compute velocity change from
   //   the boids rules, if this boid is within the neighborhood distance.
   // - Clamp the speed change before putting the new speed in vel2
+  int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if (index >= 0 && index < N) {
+    glm::vec3 fGridCoords = (pos[index] - gridMin) * inverseCellWidth;
+    glm::ivec3 iGridCoords(glm::floor(fGridCoords));
+    glm::ivec3 searchDirection(
+      (fGridCoords.x - iGridCoords.x) > 0.5f ? 1 : -1,
+      (fGridCoords.y - iGridCoords.y) > 0.5f ? 1 : -1,
+      (fGridCoords.z - iGridCoords.z) > 0.5f ? 1 : -1);
+
+    VelocityCalculationInfo calculationInfo = initVelocityCalculationInfo(N, index, pos, vel1);
+
+    // will preserve cache locality except in the case we need to wrap around the boundaries
+
+    // CHECK 8 CELLS
+    /**/
+    for (int i = 0; i < 2; ++i) {
+      int z = (iGridCoords.z + i * searchDirection.z) % gridResolution;
+      for (int j = 0; j < 2; ++j) {
+        int y = (iGridCoords.y + j * searchDirection.y) % gridResolution;
+        for (int k = 0; k < 2; ++k) {
+          int x = (iGridCoords.x + k * searchDirection.x) % gridResolution;
+          int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
+          int gridStart = gridCellStartIndices[gridIndex];
+          int gridEnd = gridCellEndIndices[gridIndex];
+          // check all boids in this cell
+          for (int l = gridStart; l < gridEnd; ++l) {
+            if (l != index) {
+              accumulateBoidContribution(l, calculationInfo);
+            }
+          }
+        }
+      }
+    }/**/
+
+    // CHECK 27 CELLS
+    /** /
+    for (int dz = -1; dz <= 1; ++dz) {
+      int z = (iGridCoords.z + dz) % gridResolution;
+      for (int dy = -1; dy <= 1; ++dy) {
+        int y = (iGridCoords.y + dy) % gridResolution;
+        for (int dx = -1; dx <= 1; ++dx) {
+          int x = (iGridCoords.x + dx) % gridResolution;
+          int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
+          int gridStart = gridCellStartIndices[gridIndex];
+          int gridEnd = gridCellEndIndices[gridIndex];
+          // check all boids in this cell
+          for (int i = gridStart; i < gridEnd; ++i) {
+            if (i != index) {
+              accumulateBoidContribution(particleArrayIndices[i], calculationInfo);
+            }
+          }
+        }
+      }
+    }/**/
+
+    vel2[index] = vel1[index] + evaluateVelocityCalculationInfo(calculationInfo);
+
+    if (glm::length(vel2[index]) > maxSpeed) {
+      vel2[index] = maxSpeed * glm::normalize(vel2[index]);
+    }
+  }
 }
 
 /**
@@ -665,6 +744,60 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed. THIS MAY BE DIFFERENT FROM BEFORE.
+
+  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (gridCellCount, dev_gridCellStartIndices, numObjects);
+  checkCUDAErrorWithLine("Clearing dev_gridCellStartIndices failed!");
+  kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (gridCellCount, dev_gridCellEndIndices, numObjects);
+  checkCUDAErrorWithLine("Clearing dev_gridCellEndIndices failed!");
+
+  kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (
+    numObjects,
+    gridSideCount,
+    glm::vec3(-scene_scale),
+    1.0f / gridCellWidth,
+    dev_pos,
+    dev_particleArrayIndices,
+    dev_particleGridIndices);
+  checkCUDAErrorWithLine("kernComputeIndices failed!");
+
+  thrust::sort_by_key(
+    dev_thrust_particleGridIndices,
+    dev_thrust_particleGridIndices + numObjects,
+    dev_thrust_particleArrayIndices);
+
+  // now apply the new order to the position and velocity buffers
+  kernArrangeBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleArrayIndices, dev_pos, dev_pos2);
+  checkCUDAErrorWithLine("rearranging position buffer (kernArrangeBuffer) failed!");
+  kernArrangeBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleArrayIndices, dev_vel1, dev_vel2);
+  checkCUDAErrorWithLine("rearranging velocity buffer (kernArrangeBuffer) failed!");
+
+  std::swap(dev_pos, dev_pos2);
+  std::swap(dev_vel1, dev_vel2);
+
+  kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (
+    numObjects,
+    dev_particleGridIndices,
+    dev_gridCellStartIndices,
+    dev_gridCellEndIndices);
+  checkCUDAErrorWithLine("kernIdentifyCellStartEnd failed!");
+
+  kernUpdateVelNeighborSearchCoherent << <fullBlocksPerGrid, blockSize >> > (
+    numObjects,
+    gridSideCount,
+    glm::vec3(-scene_scale),
+    1.0f / gridCellWidth,
+    gridCellWidth,
+    dev_gridCellStartIndices,
+    dev_gridCellEndIndices,
+    dev_pos,
+    dev_vel1,
+    dev_vel2);
+  checkCUDAErrorWithLine("kernUpdateVelNeighborSearchScattered failed!");
+
+  kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
+  checkCUDAErrorWithLine("kernUpdatePos failed!");
+
+  std::swap(dev_vel1, dev_vel2);
 }
 
 void Boids::endSimulation() {
@@ -673,6 +806,11 @@ void Boids::endSimulation() {
   cudaFree(dev_pos);
 
   // TODO-2.1 TODO-2.3 - Free any additional buffers here.
+  cudaFree(dev_pos2);
+  cudaFree(dev_particleArrayIndices);
+  cudaFree(dev_particleGridIndices);
+  cudaFree(dev_gridCellStartIndices);
+  cudaFree(dev_gridCellEndIndices);
 }
 
 void Boids::unitTest() {
