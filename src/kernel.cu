@@ -395,6 +395,39 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
 	// This is basically a parallel unrolling of a loop that goes
 	// "this index doesn't match the one before it, must be a new cell!"
 
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (index > N) {
+		return;
+	}
+
+	//Check only for next Element
+	if (index == 0)
+	{
+		gridCellStartIndices[particleGridIndices[index]] = index;
+		/*if (particleGridIndices[index] != particleGridIndices[index + 1])
+		{
+			gridCellEndIndices[particleGridIndices[index]] = index;
+		}*/
+	}
+	else if(index == N)
+	{
+		gridCellEndIndices[particleGridIndices[index]] = index;
+		/*if (particleGridIndices[index] != particleGridIndices[index - 1])
+		{
+			gridCellStartIndices[particleGridIndices[index]] = index;
+		}*/
+	}
+	else
+	{
+		if (particleGridIndices[index] != particleGridIndices[index - 1])
+		{
+			gridCellStartIndices[particleGridIndices[index]] = index;
+		}
+		if (particleGridIndices[index] != particleGridIndices[index + 1])
+		{
+			gridCellEndIndices[particleGridIndices[index]] = index;
+		}
+	}
 
 }
 
@@ -511,8 +544,12 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 	SortIndicesWithGrid(numObjects);
 
 	//
+	//First Initialise All Start and End buffers to -1
+	kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellStartIndices, -1);
+	kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellEndIndices, -1);
 
-
+	kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices,
+		dev_gridCellStartIndices, dev_gridCellEndIndices);
 }
 
 
