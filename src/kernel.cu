@@ -86,7 +86,9 @@ int *dev_gridCellEndIndices;   // to this cell?
 // TODO-2.3 - consider what additional buffers you might need to reshuffle
 // the position and velocity data to be coherent within cells.
 int *dev_shuffledArrayIndices;
-thrust::device_ptr<int> dev_thrust_shuffledArrayIndices;
+int *dev_preShuffledArrayIndices;
+thrust::device_ptr<int> dev_thrust_shuffledArrayIndices1;
+thrust::device_ptr<int> dev_thrust_shuffledArrayIndices2;
 
 // LOOK-2.1 - Grid parameters based on simulation parameters.
 // These are automatically computed for you in Boids::initSimulation
@@ -174,6 +176,7 @@ void Boids::initSimulation(int N) {
 	cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
 	cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
 	cudaMalloc((void**)&dev_shuffledArrayIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_preShuffledArrayIndices, N * sizeof(int));
 
 	cudaMalloc((void**)&dev_gridCellStartIndices, gridCellCount * sizeof(int));
 	cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
@@ -381,6 +384,13 @@ __global__ void kernResetIntBuffer(int N, int *intBuffer, int value) {
   }
 }
 
+__global__ void kernEnumerate(int N, thrust::device_ptr<int> intBuffer) {
+  int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if (index < N) {
+    intBuffer[index] = index;
+  }
+}
+
 __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   int *gridCellStartIndices, int *gridCellEndIndices) {
   // TODO-2.1
@@ -578,6 +588,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 		// - Clamp the speed change before putting the new speed in vel2
 		// - Identify the grid cell that this particle is in
 		// - Identify which cells may contain neighbors. This isn't always 8.
+
 		for (int i=cellToCheckStart; i <= cellToCheckEnd; i++){
 			// - Access each boid in the cell and compute velocity change from
 			//   the boids rules, if this boid is within the neighborhood distance.
@@ -732,6 +743,11 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // Wrap device vectors in thrust iterators for use with thrust.
   dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
   dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
+  dev_thrust_shuffledArrayIndices1 = thrust::device_ptr<int>(dev_particleArrayIndices);
+  dev_thrust_shuffledArrayIndices2 = thrust::device_ptr<int>(dev_particleArrayIndices);
+  thrust::copy(dev_thrust_particleArrayIndices,
+  		dev_thrust_particleArrayIndices + numObjects,
+			dev_thrust_shuffledArrayIndices1);
   thrust::sort_by_key(dev_thrust_particleGridIndices,
   										dev_thrust_particleGridIndices + numObjects,
 											dev_thrust_particleArrayIndices);
@@ -746,21 +762,25 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - BIG DIFFERENCE: use the rearranged array index buffer to reshuffle all
   //   the particle data in the simulation array.
   //   CONSIDER WHAT ADDITIONAL BUFFERS YOU NEED
-  dev_thrust_shuffledArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
-  thrust::copy(dev_thrust_particleArrayIndices,
-  		dev_thrust_particleArrayIndices + numObjects,
-			dev_thrust_shuffledArrayIndices);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices,
-  										dev_thrust_shuffledArrayIndices + numObjects,
+  thrust::copy(dev_thrust_shuffledArrayIndices1,
+  		dev_thrust_shuffledArrayIndices1 + numObjects,
+			dev_thrust_shuffledArrayIndices2);
+  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
+  										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_pos);
-  thrust::copy(dev_thrust_particleArrayIndices,
-  		dev_thrust_particleArrayIndices + numObjects,
-			dev_thrust_shuffledArrayIndices);
-  //dev_thrust_shuffledArrayIndices = thrust::device_ptr<int>(dev_shuffledArrayIndices);
-  //dev_thrust_shuffledArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices,
-  										dev_thrust_shuffledArrayIndices + numObjects,
+  thrust::copy(dev_thrust_shuffledArrayIndices2,
+  		dev_thrust_shuffledArrayIndices2 + numObjects,
+			dev_thrust_shuffledArrayIndices1);
+  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
+  										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_vel1);
+  // determine unshuffle order. enumerate one index buffer then sort it by a copy of
+  // the original
+  kernEnumerate<<<numObjects, blockSize>>>(numObjects, dev_thrust_shuffledArrayIndices1);
+  thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
+  										dev_thrust_shuffledArrayIndices2 + numObjects,
+											dev_thrust_shuffledArrayIndices1);
+
 
   // - Perform velocity updates using neighbor search
   kernUpdateVelNeighborSearchCoherent<<<numObjects, blockSize>>>(numObjects,
@@ -774,6 +794,16 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 																																 dev_vel1,
 																																 dev_vel2);
   checkCUDAErrorWithLine("kernUpdateVelocityNeighborSearchCoherent failed!");
+
+  thrust::copy(dev_thrust_shuffledArrayIndices1,
+  		dev_thrust_shuffledArrayIndices1 + numObjects,
+			dev_thrust_shuffledArrayIndices2);
+  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
+  										dev_thrust_shuffledArrayIndices1 + numObjects,
+											dev_pos);
+  thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
+  										dev_thrust_shuffledArrayIndices2 + numObjects,
+											dev_vel2);
 
   // - Update positions
   kernUpdatePos<<<numObjects, blockSize>>>(numObjects, dt, dev_pos, dev_vel2);
@@ -800,6 +830,7 @@ void Boids::endSimulation() {
 	cudaFree(dev_gridCellStartIndices);
 	cudaFree(dev_gridCellEndIndices);
 	cudaFree(dev_shuffledArrayIndices);
+	cudaFree(dev_preShuffledArrayIndices);
 }
 
 void Boids::unitTest() {
