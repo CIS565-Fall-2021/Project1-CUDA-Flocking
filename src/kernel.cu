@@ -61,7 +61,7 @@ __host__ __device__ float distanceBoid(const glm::vec3& firstBoid, const glm::ve
 #define maxSpeed 1.0f
 
 /*! Size of the starting area in simulation space. */
-#define scene_scale 100.0f
+#define scene_scale 1000.0f
 
 /***********************************************
 * Kernel state (pointers are device pointers) *
