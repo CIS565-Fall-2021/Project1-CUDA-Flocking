@@ -26,7 +26,7 @@ Stats:
 - Number of Boids: 12 million 
 - Average FPS: ~40
 
-Note: For the first picture, I use a larger timestep to speed up the simulation to better observe the overall trend whereas the second picture uses a smaller time step to better observe the movement of the particles (it also looks really cool :joy:).
+Note: For the first picture, I use a larger timestep to speed up the simulation to better observe the overall trend whereas the second picture uses a smaller time step to better observe the movement of the particles (it also looks really cool :sunglasses:).
 
 --- 
 
