@@ -17,6 +17,14 @@
 #define UNIFORM_GRID 1
 #define COHERENT_GRID 0
 
+// toggles for measuring just simulation CUDA kernel
+#define KERNEL_FPS 0
+
+// CUDA events for recording time stamp
+#if KERNEL_FPS
+cudaEvent_t kernel_start, kernel_stop;
+#endif
+
 // LOOK-1.2 - change this to adjust particle count in the simulation
 const int N_FOR_VIS = 5000;
 const float DT = 0.2f;
@@ -196,6 +204,10 @@ void initShaders(GLuint * program) {
     cudaGLMapBufferObject((void**)&dptrVertVelocities, boidVBO_velocities);
 
     // execute the kernel
+#if KERNEL_FPS
+    cudaEventRecord(kernel_start);
+#endif
+
     #if UNIFORM_GRID && COHERENT_GRID
     Boids::stepSimulationCoherentGrid(DT);
     #elif UNIFORM_GRID
@@ -203,6 +215,11 @@ void initShaders(GLuint * program) {
     #else
     Boids::stepSimulationNaive(DT);
     #endif
+
+#if KERNEL_FPS
+    cudaEventRecord(kernel_stop);
+    cudaEventSynchronize(kernel_stop);
+#endif
 
     #if VISUALIZE
     Boids::copyBoidsToVBO(dptrVertPositions, dptrVertVelocities);
@@ -217,6 +234,13 @@ void initShaders(GLuint * program) {
     double timebase = 0;
     int frame = 0;
 
+#if KERNEL_FPS    
+    cudaEventCreate(&kernel_start);
+    cudaEventCreate(&kernel_stop);
+    double time_elapse = 0;
+    double kernel_fps = 0;
+#endif
+
     Boids::unitTest(); // LOOK-1.2 We run some basic example code to make sure
                        // your CUDA development setup is ready to go.
 
@@ -224,6 +248,7 @@ void initShaders(GLuint * program) {
       glfwPollEvents();
 
       frame++;
+#if !KERNEL_FPS
       double time = glfwGetTime();
 
       if (time - timebase > 1.0) {
@@ -231,13 +256,29 @@ void initShaders(GLuint * program) {
         timebase = time;
         frame = 0;
       }
+#endif
 
       runCUDA();
+ 
+#if KERNEL_FPS
+      float milliseconds = 0;
+      cudaEventElapsedTime(&milliseconds, kernel_start, kernel_stop);
+      time_elapse += milliseconds / 1000;
+
+      // display average fps of first 5000 frames
+      if (frame == 5000) {
+        kernel_fps = frame / time_elapse;
+      }
+#endif
 
       std::ostringstream ss;
       ss << "[";
       ss.precision(1);
+#if KERNEL_FPS
+      ss << std::fixed << kernel_fps;
+#else
       ss << std::fixed << fps;
+#endif
       ss << " fps] " << deviceName;
       glfwSetWindowTitle(window, ss.str().c_str());
 
