@@ -21,6 +21,7 @@ A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>, al
 
 
 Stats: 
+- Coherent uniform grid approach
 - CPU: i7-10700F @ 2.90GHz
 - GPU: SM 8.6 NVIDIA GeForce RTX 3080
 - Number of Boids: 12 million 
@@ -39,21 +40,19 @@ In this project, we investigate 3 approaches to implement the Reynolds Boids alg
 3. Coherent uniform gird approach improves upon the second approach by cutting one level of indirection when accessing the boids' data.
 
 ---
-To validate our optimizations, we plot the framerate change with increasing number of boids for these 3 approaches as shown below: 
+To validate our optimizations, we plot the framerate change with increasing number of boids for these 3 approaches. Note that the below experiment has ```scene_scale=100.0f``` because it will affect FPS based on the number particles in the scene. Additionally, we consider 30~60 FPS to be an acceptable framerate. 
 
-### With Visualization
+<img src="images/naive.png">
 
-### Without Visualization
+<img src="images/uniform.png">
 
-For each implementation, how does changing the number of boids affect performance? Why do you think this is?
-did you experience any performance improvements with the more coherent uniform grid? Was this the outcome you expected? Why or why not?
+<img src="images/coherent.png">
+
+Based on the above 3 plots, we conclude that there is approximately **x10** efficiency improvement (in terms of the number boids the method can handle) per step going from the naive approach to the coherent uniform grid approach. For example, the naive approach can handle tens of thousands of particles whereas the coherent grid approach can handle millions of particles with ease. Our optimization works.  
 
 ---
 We also plot framerate change with increasing block size to investigate the effect of block size on the efficiency of the algorithm: 
 
-### With Visualization
-
-### Without Visualization
 
 For each implementation, how does changing the block count and block size affect performance? Why do you think this is?
 
