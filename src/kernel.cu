@@ -595,7 +595,10 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 			if (i == iSelf){
 				continue;
 			}
+
+
 			selfToThem = pos[i] - pos[iSelf];
+
 			float distanceToBoid = glm::sqrt(glm::dot(selfToThem, selfToThem));
 
 			// --- Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
@@ -743,8 +746,9 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // Wrap device vectors in thrust iterators for use with thrust.
   dev_thrust_particleArrayIndices = thrust::device_ptr<int>(dev_particleArrayIndices);
   dev_thrust_particleGridIndices = thrust::device_ptr<int>(dev_particleGridIndices);
-  dev_thrust_shuffledArrayIndices1 = thrust::device_ptr<int>(dev_particleArrayIndices);
-  dev_thrust_shuffledArrayIndices2 = thrust::device_ptr<int>(dev_particleArrayIndices);
+  dev_thrust_shuffledArrayIndices1 = thrust::device_ptr<int>(dev_shuffledArrayIndices1);
+  dev_thrust_shuffledArrayIndices2 = thrust::device_ptr<int>(dev_shuffledArrayIndices2);
+
   thrust::copy(dev_thrust_particleArrayIndices,
   		dev_thrust_particleArrayIndices + numObjects,
 			dev_thrust_shuffledArrayIndices1);
@@ -762,18 +766,29 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - BIG DIFFERENCE: use the rearranged array index buffer to reshuffle all
   //   the particle data in the simulation array.
   //   CONSIDER WHAT ADDITIONAL BUFFERS YOU NEED
+	
   thrust::copy(dev_thrust_shuffledArrayIndices1,
   		dev_thrust_shuffledArrayIndices1 + numObjects,
 			dev_thrust_shuffledArrayIndices2);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
+
+	thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
   										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_pos);
-  thrust::copy(dev_thrust_shuffledArrayIndices2,
+	thrust::copy(dev_thrust_shuffledArrayIndices2,
   		dev_thrust_shuffledArrayIndices2 + numObjects,
 			dev_thrust_shuffledArrayIndices1);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
+	thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
   										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_vel1);
+
+	thrust::copy(dev_thrust_shuffledArrayIndices1,
+		dev_thrust_shuffledArrayIndices1 + numObjects,
+		dev_thrust_shuffledArrayIndices2);
+	thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
+		dev_thrust_shuffledArrayIndices2 + numObjects,
+		dev_vel2);
+											
+											
   // determine unshuffle order. enumerate one index buffer then sort it by a copy of
   // the original
   kernEnumerate<<<numObjects, blockSize>>>(numObjects, dev_thrust_shuffledArrayIndices1);
@@ -794,7 +809,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 																																 dev_vel1,
 																																 dev_vel2);
   checkCUDAErrorWithLine("kernUpdateVelocityNeighborSearchCoherent failed!");
-
+	
   thrust::copy(dev_thrust_shuffledArrayIndices1,
   		dev_thrust_shuffledArrayIndices1 + numObjects,
 			dev_thrust_shuffledArrayIndices2);
@@ -804,6 +819,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
   										dev_thrust_shuffledArrayIndices2 + numObjects,
 											dev_vel2);
+							
 
   cudaDeviceSynchronize();
   // - Update positions
@@ -839,10 +855,12 @@ void Boids::unitTest() {
   // test unstable sort
   int *dev_intKeys;
   int *dev_intValues;
+	int *dev_intValues2;
   int N = 10;
 
   std::unique_ptr<int[]>intKeys{ new int[N] };
   std::unique_ptr<int[]>intValues{ new int[N] };
+	std::unique_ptr<int[]>intValues2{ new int[N] };
 
   intKeys[0] = 0; intValues[0] = 0;
   intKeys[1] = 1; intValues[1] = 1;
@@ -861,6 +879,9 @@ void Boids::unitTest() {
   cudaMalloc((void**)&dev_intValues, N * sizeof(int));
   checkCUDAErrorWithLine("cudaMalloc dev_intValues failed!");
 
+	cudaMalloc((void**)&dev_intValues2, N * sizeof(int));
+	checkCUDAErrorWithLine("cudaMalloc dev_intValues failed!");
+
   dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
 
   std::cout << "before unstable sort: " << std::endl;
@@ -876,18 +897,27 @@ void Boids::unitTest() {
   // Wrap device vectors in thrust iterators for use with thrust.
   thrust::device_ptr<int> dev_thrust_keys(dev_intKeys);
   thrust::device_ptr<int> dev_thrust_values(dev_intValues);
+	thrust::device_ptr<int> dev_thrust_values2(dev_intValues2);
+
+	thrust::copy(dev_thrust_values,
+		dev_thrust_values + N,
+		dev_thrust_values2);
+
   // LOOK-2.1 Example for using thrust::sort_by_key
   thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + N, dev_thrust_values);
 
   // How to copy data back to the CPU side from the GPU
   cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
   cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
-  checkCUDAErrorWithLine("memcpy back failed!");
+	cudaMemcpy(intValues2.get(), dev_intValues2, sizeof(int) * N, cudaMemcpyDeviceToHost);
+
+	checkCUDAErrorWithLine("memcpy back failed!");
 
   std::cout << "after unstable sort: " << std::endl;
   for (int i = 0; i < N; i++) {
     std::cout << "  key: " << intKeys[i];
-    std::cout << " value: " << intValues[i] << std::endl;
+    std::cout << " value: " << intValues[i];
+		std::cout << " value2: " << intValues2[i] << std::endl;
   }
 
   // cleanup
