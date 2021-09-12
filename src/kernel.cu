@@ -6,8 +6,6 @@
 #include "utilityCore.hpp"
 #include "kernel.h"
 
-// TODO: remove rule1, 2, and 3 and replace with alignment, separation, and cohesion
-
 // LOOK-2.1 potentially useful for doing grid-based neighbor search
 #ifndef imax
 #define imax( a, b ) ( ((a) > (b)) ? (a) : (b) )
@@ -243,11 +241,11 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     glm::vec3 selfVel = vel[iSelf];
 
     // variables for rules
-    glm::vec3 perceivedCenter(0.f); // for rule 1
-    int numOfNeighborsForRule1 = 0;
-    glm::vec3 c(0.f); // for rule 2
-    glm::vec3 perceivedVelocity(0.f); // for rule3
-    int numOfNeighborsForRule3 = 0;
+    glm::vec3 perceivedCenter(0.f); // for cohesion
+    int numOfNeighborsForCohesion = 0;
+    glm::vec3 c(0.f); // for separation
+    glm::vec3 perceivedVelocity(0.f); // for alignment
+    int numOfNeighborsForAlignment = 0;
 
     // Iterate through all boids and update the vectors declared above
     for (int i = 0; i < N; i++)
@@ -264,7 +262,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
         if (distanceToSelf < rule1Distance)
         {
           perceivedCenter += boidPos;
-          numOfNeighborsForRule1++;
+          numOfNeighborsForCohesion++;
         }
 
         // Rule 2: boids try to stay a distance d away from each other
@@ -275,20 +273,20 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
         if (distanceToSelf < rule3Distance)
         {
           perceivedVelocity += boidVel;
-          numOfNeighborsForRule3++;
+          numOfNeighborsForAlignment++;
         }
     }
 
     // Average the vectors (excluding c)
-    perceivedCenter /= numOfNeighborsForRule1;
-    perceivedVelocity /= numOfNeighborsForRule3;
+    perceivedCenter /= numOfNeighborsForCohesion;
+    perceivedVelocity /= numOfNeighborsForAlignment;
 
     // Get the final vectors for each rule
-    glm::vec3 rule1 = (perceivedCenter - selfPos) * rule1Scale;
-    glm::vec3 rule2 = c * rule2Scale;
-    glm::vec3 rule3 = perceivedVelocity * rule3Scale;
+    glm::vec3 cohesion = (perceivedCenter - selfPos) * rule1Scale;
+    glm::vec3 separation = c * rule2Scale;
+    glm::vec3 alignment = perceivedVelocity * rule3Scale;
     
-    return selfVel + rule1 + rule2 + rule3;
+    return selfVel + cohesion + separation + alignment;
 }
 
 /**
@@ -452,21 +450,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   glm::vec3 perceivedCenter;
   glm::vec3 c;
   glm::vec3 perceivedVelocity;
-  int numOfNeighborsForRule1 = 0;
-  int numOfNeighborsForRule3 = 0;
+  int numOfNeighborsForCohesion = 0;
+  int numOfNeighborsForAlignment = 0;
   glm::vec3 selfVel = vel1[index];
 
-  // TODO: change to z-y-x?
   for (int z = minGridPos.z; z <= maxGridPos.z; z++)
   {
     for (int y = minGridPos.y; y <= maxGridPos.y; y++)
     {
       for (int x = minGridPos.x; x <= maxGridPos.x; x++)
       {
-
-        if (x < 0 || y < 0 || z < 0 || x >= gridResolution || y >= gridResolution || z >= gridResolution)
-          continue; // out of bounds
-
         // - For each cell, read the start/end indices in the boid pointer array.
         int neighborCellIndex = gridIndex3Dto1D(x, y, z, gridResolution);
         int startInx = gridCellStartIndices[neighborCellIndex];
@@ -492,7 +485,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
             if (distanceToSelf < rule1Distance)
             {
               perceivedCenter += boidPos;
-              numOfNeighborsForRule1++;
+              numOfNeighborsForCohesion++;
             }
 
             // Rule 2: boids try to stay a distance d away from each other
@@ -503,7 +496,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
             if (distanceToSelf < rule3Distance)
             {
               perceivedVelocity += boidVel;
-              numOfNeighborsForRule3++;
+              numOfNeighborsForAlignment++;
             }
           }
         }
@@ -511,25 +504,25 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     }
   }
 
-  glm::vec3 rule1{ 0.f };
-  glm::vec3 rule2{ 0.f };
-  glm::vec3 rule3{ 0.f };
+  glm::vec3 cohesionVel{ 0.f };
+  glm::vec3 separationVel{ 0.f };
+  glm::vec3 alignmentVel{ 0.f };
 
-  if (numOfNeighborsForRule1 > 0)
+  if (numOfNeighborsForCohesion > 0)
   {
-    perceivedCenter /= numOfNeighborsForRule1;
-    rule1 = (perceivedCenter - selfPos) * rule1Scale;
+    perceivedCenter /= numOfNeighborsForCohesion;
+    cohesionVel = (perceivedCenter - selfPos) * rule1Scale;
   }
 
-  rule2 = c * rule2Scale;
+  separationVel = c * rule2Scale;
 
-  if (numOfNeighborsForRule3 > 0)
+  if (numOfNeighborsForAlignment > 0)
   {
-    perceivedVelocity /= numOfNeighborsForRule3;
-    rule3 = perceivedVelocity * rule3Scale;
+    perceivedVelocity /= numOfNeighborsForAlignment;
+    alignmentVel = perceivedVelocity * rule3Scale;
   }
 
-  glm::vec3 boidVelocity = selfVel + rule1 + rule2 + rule3;
+  glm::vec3 boidVelocity = selfVel + cohesionVel + separationVel + alignmentVel;
 
   // - Clamp the speed change before putting the new speed in vel2
   // TODO: refactor
