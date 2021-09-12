@@ -6,6 +6,8 @@
 #include "utilityCore.hpp"
 #include "kernel.h"
 
+#include "fstream"
+
 // LOOK-2.1 potentially useful for doing grid-based neighbor search
 #ifndef imax
 #define imax(a, b) (((a) > (b)) ? (a) : (b))
@@ -55,6 +57,7 @@ void checkCUDAError(const char *msg, int line = -1)
 
 /*! Size of the starting area in simulation space. */
 #define scene_scale 100.0f
+//#define scene_scale 50.f
 
 /***********************************************
 * Kernel state (pointers are device pointers) *
@@ -469,8 +472,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   for (int i = 0; i < 8; i++)
   {
     int thisCell = myGridCells[i];
-    thisCell = thisCell < 0 ? -1 : thisCell >= N ? -1
-                                                 : thisCell;
+    myGridCells[i] = thisCell < 0 ? -1 : thisCell >= N ? -1
+                                                       : thisCell;
   }
   // - For each cell, read the start/end indices in the boid pointer array.
   // - Access each boid in the cell and compute velocity change from
@@ -512,7 +515,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   glm::vec3 dV3 = rule3Scale * perceivedVelocity;
   glm::vec3 dVel = dV1 + dV2 + dV3;
   // - Clamp the speed change before putting the new speed in vel2
-  vel2[index] = maxSpeed * glm::normalize(dVel);
+  vel2[selfIdx] = maxSpeed * glm::normalize(dVel);
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
@@ -588,6 +591,48 @@ void Boids::stepSimulationScatteredGrid(float dt)
                                                              dev_gridCellStartIndices,
                                                              dev_gridCellEndIndices);
   checkCUDAErrorWithLine("kernIdentifyCellStartEnd failed!");
+
+  // {
+  //   static bool once = false;
+  //   if (!once)
+  //   {
+  //     once = true;
+  //     std::ofstream myFile;
+  //     myFile.open("debug.txt");
+  //     if (myFile.is_open())
+  //     {
+  //       std::unique_ptr<int[]> startIdxs{new int[gridCellCount]};
+  //       std::unique_ptr<int[]> endIdxs{new int[gridCellCount]};
+  //       cudaMemcpy(startIdxs.get(), dev_gridCellStartIndices, sizeof(int) * gridCellCount, cudaMemcpyDeviceToHost);
+  //       cudaMemcpy(endIdxs.get(), dev_gridCellStartIndices, sizeof(int) * gridCellCount, cudaMemcpyDeviceToHost);
+  //       checkCUDAErrorWithLine("memcpy back failed!");
+  //       // myFile << "after unstable sort: " << std::endl;
+  //       // std::cout << "startidx";
+  //       // for (int i = 0; i < gridCellCount; i++)
+  //       // {
+  //       //   std::cout << " " << startIdxs[i];
+  //       // }
+  //       // std::cout << std::endl;
+  //       // std::cout << "endidx";
+  //       // for (int i = 0; i < gridCellCount; i++)
+  //       // {
+  //       //   std::cout << " " << endIdxs[i];
+  //       // }
+  //       // std::cout << std::endl;
+  //       for (int i = 0; i < gridCellCount; i++)
+  //       {
+  //         myFile << startIdxs[i] << " " << endIdxs[i] << std::endl;
+  //       }
+  //       std::cout << "grid cell count is " << gridCellCount << std::endl;
+  //       myFile.close();
+  //     }
+  //     else
+  //     {
+  //       std::cout << "file not opened" << std::endl;
+  //     }
+  //   }
+  // }
+
   // - Perform velocity updates using neighbor search
   kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid, blockSize>>>(numObjects,
                                                                          gridSideCount,
