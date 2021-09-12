@@ -61,7 +61,7 @@ Based on the above 3 plots, I conclude that there is approximately **x10** effic
 Furthermore, the program runs more efficiently without visualization. Drawing all the boids in OpenGL takes time and resources. 
 
 ---
-We also plot framerate change with increasing block size to investigate the effect of block size on the efficiency of the algorithm. Note that the following parameters are used when running this experiment:
+I also plot framerate change with increasing block size to investigate the effect of block size on the efficiency of the algorithm. Note that the following parameters are used when running this experiment:
 
 - Visualization: off
 - Approach: coherent grid
