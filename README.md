@@ -75,7 +75,7 @@ At ```blocksize=1024```, the program achieves the highest framerate.
 ---
 In this implementation, the cell width of the uniform grid is hardcoded to be twice the neighborhood distance. Therefore, the program can get away with at most 8 neighbor cell checks. However, if I change the cell width to be the neighborhood distance, 27 neighboring cells will need to be checked. To investigate this further, two setups are used to compare the performance: 
 
-1. Uniform grid approach with 50000 
-2. Uniform grid approach with 500000
+1. Uniform grid approach with 50000 boids
+2. Uniform grid approach with 500000 boids
 
 Using the first setup, checking 27 cells with ```gridCellWidth = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);``` didn't noticeably impact the performance with 50000 boids sparsely populating the space. Using the second setup with densely populated boids in the space, checking 27 cells provides better performance than checking only 8 cell.
