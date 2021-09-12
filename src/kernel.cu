@@ -57,11 +57,11 @@ void checkCUDAError(const char *msg, int line = -1) {
 // indicate an empty cell
 #define NO_BOID -1
 
-// toggle for shared-memory optimization
-#define SHARED_MEMORY 0
+// toggle for halving cell width
+#define HALF_CELL_WIDTH 0
 
 // toggle for grid-looping optimization
-#define GRID_LOOPING 0
+#define GRID_LOOPING 1
 
 /***********************************************
 * Kernel state (pointers are device pointers) *
@@ -167,7 +167,11 @@ void Boids::initSimulation(int N) {
   checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
   // LOOK-2.1 computing grid params
+#if HALF_CELL_WIDTH
+  gridCellWidth = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+#else
   gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+#endif
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
   gridSideCount = 2 * halfSideCount;
 
@@ -460,6 +464,15 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   int upper_y = int(offset.y + max_distance * inverseCellWidth);
   int lower_z = int(offset.z - max_distance * inverseCellWidth);
   int upper_z = int(offset.z + max_distance * inverseCellWidth);
+#elif HALF_CELL_WIDTH
+  // find 27 neighbor cells
+  glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
+  int lower_x = int(offset.x) - 1;
+  int upper_x = int(offset.x) + 1;
+  int lower_y = int(offset.y) - 1;
+  int upper_y = int(offset.y) + 1;
+  int lower_z = int(offset.z) - 1;
+  int upper_z = int(offset.z) + 1;
 #else
   // find 8 neighbor cells
   glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
@@ -542,11 +555,6 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
   glm::vec3 new_vel = vel1[this_index] + rule1_vel + rule2_vel + rule3_vel;
 
-  //
-  float3 test_vel = make_float3(new_vel.x, new_vel.y, new_vel.z);
-  float test_x = new_vel.x;
-  //
-
   // Clamp the speed
   float speed = glm::length(new_vel);
   if (speed > maxSpeed) {
@@ -604,6 +612,15 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   int upper_y = int(offset.y + max_distance * inverseCellWidth);
   int lower_z = int(offset.z - max_distance * inverseCellWidth);
   int upper_z = int(offset.z + max_distance * inverseCellWidth);
+#elif HALF_CELL_WIDTH
+  // find 27 neighbor cells
+  glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
+  int lower_x = int(offset.x) - 1;
+  int upper_x = int(offset.x) + 1;
+  int lower_y = int(offset.y) - 1;
+  int upper_y = int(offset.y) + 1;
+  int lower_z = int(offset.z) - 1;
+  int upper_z = int(offset.z) + 1;
 #else
   // find 8 neighbor cells
   glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
@@ -685,11 +702,6 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   glm::vec3 rule3_vel = avg_vel * rule3Scale;
 
   glm::vec3 new_vel = vel1[this_index] + rule1_vel + rule2_vel + rule3_vel;
-
-  //
-  float3 test_vel = make_float3(new_vel.x, new_vel.y, new_vel.z);
-  float test_x = new_vel.x;
-  //
 
   // Clamp the speed
   float speed = glm::length(new_vel);
@@ -832,11 +844,6 @@ void Boids::endSimulation() {
 
 void Boids::unitTest() {
   // LOOK-1.2 Feel free to write additional tests here.
-  /*glm::vec3 a(1.0f, 0.0f, 0.0f);
-  glm::vec3 b(0.0f, 1.0f, 0.0f);*/
-  float a = 0.7;
-  float b = 0.3;
-  std::cout << " !!!!!!!!!!!!!!: " << int(a) << int(b) << std::endl;
   // test unstable sort
   int *dev_intKeys;
   int *dev_intValues;

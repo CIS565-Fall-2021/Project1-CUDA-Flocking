@@ -13,12 +13,12 @@
 // ================
 
 // LOOK-2.1 LOOK-2.3 - toggles for UNIFORM_GRID and COHERENT_GRID
-#define VISUALIZE 0
-#define UNIFORM_GRID 1
+#define VISUALIZE 1
+#define UNIFORM_GRID 0
 #define COHERENT_GRID 0
 
-// toggles for measuring just simulation CUDA kernel
-#define KERNEL_FPS 0
+// toggle for measuring just simulation CUDA kernel
+#define KERNEL_FPS 1
 
 // CUDA events for recording time stamp
 #if KERNEL_FPS
@@ -265,9 +265,11 @@ void initShaders(GLuint * program) {
       cudaEventElapsedTime(&milliseconds, kernel_start, kernel_stop);
       time_elapse += milliseconds / 1000;
 
-      // display average fps of first 5000 frames
-      if (frame == 5000) {
+      // display average FPS of every 5 seconds
+      if (time_elapse >= 5.0f) {
         kernel_fps = frame / time_elapse;
+        frame = 0;
+        time_elapse = 0;
       }
 #endif
 
