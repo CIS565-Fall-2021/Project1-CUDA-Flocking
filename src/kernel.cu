@@ -234,9 +234,12 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     // Rule 2: boids try to stay a distance d away from each other
     // Rule 3: boids try to match the speed of surrounding boids
 
-    float rule1NumNeighbor, rule3NumNeighbor; 
+    float rule1NumNeighbor = 0.f;
+    float rule3NumNeighbor = 0.f;
     
-    glm::vec3 rule1Vel, rule2Vel, rule3Vel; 
+    glm::vec3 rule1Vel(0.f);
+    glm::vec3 rule2Vel(0.f);
+    glm::vec3 rule3Vel(0.f);
 
     const glm::vec3 myPos(pos[iSelf]);
     const glm::vec3 myVel(vel[iSelf]);
@@ -268,7 +271,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
         }
     }
 
-    glm::vec3 newVel;
+    glm::vec3 newVel = myVel;
 
     if (rule1NumNeighbor > 0) {
         newVel += (rule1Vel / rule1NumNeighbor - myPos) * rule1Scale;
@@ -281,10 +284,6 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     }
 
     // Clamp 
-    if (glm::length(newVel) > maxSpeed) { newVel = glm::normalize(newVel) * maxSpeed; }
-
-    // Add original velocity and Clamp again
-    newVel += myVel;
     if (glm::length(newVel) > maxSpeed) { newVel = glm::normalize(newVel) * maxSpeed; }
 
     return newVel;
