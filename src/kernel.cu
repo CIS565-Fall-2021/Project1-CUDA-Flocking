@@ -85,8 +85,8 @@ int *dev_gridCellEndIndices;   // to this cell?
 
 // TODO-2.3 - consider what additional buffers you might need to reshuffle
 // the position and velocity data to be coherent within cells.
-int *dev_shuffledArrayIndices;
-int *dev_preShuffledArrayIndices;
+int *dev_shuffledArrayIndices1;
+int *dev_shuffledArrayIndices2;
 thrust::device_ptr<int> dev_thrust_shuffledArrayIndices1;
 thrust::device_ptr<int> dev_thrust_shuffledArrayIndices2;
 
@@ -175,8 +175,8 @@ void Boids::initSimulation(int N) {
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
 	cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
 	cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
-	cudaMalloc((void**)&dev_shuffledArrayIndices, N * sizeof(int));
-	cudaMalloc((void**)&dev_preShuffledArrayIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_shuffledArrayIndices1, N * sizeof(int));
+	cudaMalloc((void**)&dev_shuffledArrayIndices2, N * sizeof(int));
 
 	cudaMalloc((void**)&dev_gridCellStartIndices, gridCellCount * sizeof(int));
 	cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
@@ -805,6 +805,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   										dev_thrust_shuffledArrayIndices2 + numObjects,
 											dev_vel2);
 
+  cudaDeviceSynchronize();
   // - Update positions
   kernUpdatePos<<<numObjects, blockSize>>>(numObjects, dt, dev_pos, dev_vel2);
   checkCUDAErrorWithLine("kernUpdatePos failed!");
@@ -815,7 +816,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   dev_vel2 = tmp;
 
   cudaDeviceSynchronize();
-
 }
 
 void Boids::endSimulation() {
@@ -829,8 +829,8 @@ void Boids::endSimulation() {
 
 	cudaFree(dev_gridCellStartIndices);
 	cudaFree(dev_gridCellEndIndices);
-	cudaFree(dev_shuffledArrayIndices);
-	cudaFree(dev_preShuffledArrayIndices);
+	cudaFree(dev_shuffledArrayIndices1);
+	cudaFree(dev_shuffledArrayIndices2);
 }
 
 void Boids::unitTest() {
