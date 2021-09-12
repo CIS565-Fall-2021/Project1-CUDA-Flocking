@@ -46,7 +46,7 @@ __host__ __device__ float distanceBoid(const glm::vec3& firstBoid, const glm::ve
 *****************/
 
 /*! Block size used for CUDA kernel launch. */
-#define blockSize 128
+#define blockSize 1024
 
 // LOOK-1.2 Parameters for the boids algorithm.
 // These worked well in our reference implementation.
@@ -61,7 +61,7 @@ __host__ __device__ float distanceBoid(const glm::vec3& firstBoid, const glm::ve
 #define maxSpeed 1.0f
 
 /*! Size of the starting area in simulation space. */
-#define scene_scale 1000.0f
+#define scene_scale 100.0f
 
 /***********************************************
 * Kernel state (pointers are device pointers) *
@@ -560,6 +560,115 @@ __device__ void computeContributionFromThisCell(int x, int y, int z, int index,
             }
         }
     }
+}
+
+__global__ void kernUpdateVelNeighborSearchScattered27Cells(
+    int N, int gridResolution, glm::vec3 gridMin,
+    float inverseCellWidth, float cellWidth,
+    int* gridCellStartIndices, int* gridCellEndIndices,
+    int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1, glm::vec3* vel2)
+{
+    int index = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (index >= N) {
+        return;
+    }
+
+    // TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
+    // the number of boids that need to be checked.
+    // - Identify the grid cell that this particle is in
+
+    // - Identify which cells may contain neighbors. This isn't always 8.
+
+      // Probelm: you have only examined one cell, you may also to need to examine neighboring cells
+      // return gridIndex3Dto1D(iX, iY, iZ, gridResolution);
+
+    int iX = glm::floor((pos[index].x - gridMin.x) * inverseCellWidth);
+    int iY = glm::floor((pos[index].y - gridMin.y) * inverseCellWidth);
+    int iZ = glm::floor((pos[index].z - gridMin.z) * inverseCellWidth);
+
+    glm::vec3 perceived_velocity{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 perceived_center{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 c{ 0.0f, 0.0f, 0.0f };
+    int number_of_neighbors_velocity{ 0 };
+    int number_of_neighbors_center{ 0 };
+
+    for (int i = iZ - 1; i <= iZ + 1; i++)
+    {
+        for (int j = iY - 1; j <= iY + 1; j++)
+        {
+            for (int k = iX - 1; k <= iX + 1; k++)
+            {
+                // going through 27 cells is not necessary (NEED CHANGE!)
+                int cellIndex = gridIndex3Dto1D(k, j, i, gridResolution);
+                int startIndex = gridCellStartIndices[cellIndex];
+                int endIndex = gridCellEndIndices[cellIndex];
+
+                // - For each cell, read the start/end indices in the boid pointer array.
+                if ((startIndex != -1) && (endIndex != -1))
+                {
+                    for (int i = startIndex; i <= endIndex; i++)
+                    {
+                        int particleIndex = particleArrayIndices[i];
+                        if (particleIndex != index)
+                        {
+                            float distanceThisBoidAndNeig = distanceBoid(pos[index], pos[particleIndex]);
+                            if (distanceThisBoidAndNeig < rule3Distance)
+                            {
+                                number_of_neighbors_velocity++;
+                                perceived_velocity += vel1[particleIndex];
+                            }
+
+                            if (distanceThisBoidAndNeig < rule2Distance)
+                            {
+                                c -= (pos[particleIndex] - pos[index]);
+                            }
+
+                            if (distanceThisBoidAndNeig < rule1Distance)
+                            {
+                                number_of_neighbors_center++;
+                                perceived_center += pos[particleIndex];
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    }
+
+    glm::vec3 alignmentVelocity{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 separationVelocity{ 0.0f, 0.0f, 0.0f };
+    glm::vec3 cohesionVelocity{ 0.0f, 0.0f, 0.0f };
+
+    if (number_of_neighbors_center != 0)
+    {
+        perceived_center /= number_of_neighbors_center;
+        cohesionVelocity = (perceived_center - pos[index]) * rule1Scale;
+    }
+
+    if (number_of_neighbors_velocity != 0)
+    {
+        perceived_velocity /= number_of_neighbors_velocity;
+        alignmentVelocity = perceived_velocity * rule3Scale;
+    }
+
+    separationVelocity = c * rule2Scale;
+
+    // - Access each boid in the cell and compute velocity change from
+    //   the boids rules, if this boid is within the neighborhood distance.
+    glm::vec3 newVelocity = vel1[index] + alignmentVelocity
+        + separationVelocity + cohesionVelocity;
+
+    glm::vec3 newDir = glm::normalize(newVelocity);
+    float newSpeed = glm::length(newVelocity);
+
+    // Clamp the speed 
+    if (newSpeed >= maxSpeed)
+    {
+        newVelocity = newDir * maxSpeed;
+    }
+    // - Clamp the speed change before putting the new speed in vel2
+    vel2[index] = newVelocity;
 }
 
 __global__ void kernUpdateVelNeighborSearchScattered(
