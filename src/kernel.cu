@@ -184,8 +184,8 @@ void Boids::initSimulation(int N) {
 
 	cudaMalloc((void**)&dev_gridCellEndIndices, N * sizeof(int));
 	checkCUDAErrorWithLine("cudaMalloc dev_gridCellEndIndices failed!");
-	
-	
+
+
 }
 
 
@@ -273,7 +273,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 		}
 
 		// Rule 2: Separation: boids try to stay a distance d away from each other
-		if (distance < rule2Distance) 
+		if (distance < rule2Distance)
 		{
 			seperation -= (pos[iSelf] - pos[i]);
 		}
@@ -286,7 +286,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 	}
 
 	if (neighborCount > 0) {
-		center =  glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
+		center = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
 		resultVel2 += (center - pos[iSelf]) * rule1Scale;
 
 		resultVel2 += perceived_velocity * rule3Scale;
@@ -409,7 +409,7 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
 			gridCellEndIndices[particleGridIndices[index]] = index;
 		}*/
 	}
-	else if(index == N)
+	else if (index == N)
 	{
 		gridCellEndIndices[particleGridIndices[index]] = index;
 		/*if (particleGridIndices[index] != particleGridIndices[index - 1])
@@ -431,6 +431,53 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
 
 }
 
+__device__ glm::vec3 computeVelocityChange2(int iSelf, thrust::device_vector<int> arrayIndices,
+	glm::vec3* pos, glm::vec3* vel1) 
+{
+	int neighborCount = 0;
+	glm::vec3 center = glm::vec3(0, 0, 0);
+	glm::vec3 seperation = glm::vec3(0, 0, 0);
+	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
+
+	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
+
+	for (int i = 0; i < arrayIndices.size(); i++)
+	{
+
+		float distance = glm::distance(pos[iSelf], pos[i]);
+
+		// Rule 1(Cohesion): boids fly towards their local perceived center of mass, which excludes themselves
+		if (distance < rule1Distance)
+		{
+			center += pos[i];
+			neighborCount += 1.0;
+		}
+
+		// Rule 2: Separation: boids try to stay a distance d away from each other
+		if (distance < rule2Distance)
+		{
+			seperation -= (pos[iSelf] - pos[i]);
+		}
+
+		// Rule 3: Alignment: boids try to match the velocities of neighboring boids
+		if (distance < rule3Distance)
+		{
+			perceived_velocity += vel1[i];
+		}
+	}
+
+	if (neighborCount > 0) {
+		center = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
+		resultVel2 += (center - pos[iSelf]) * rule1Scale;
+
+		resultVel2 += perceived_velocity * rule3Scale;
+	}
+
+	resultVel2 += seperation * rule2Scale;
+
+	return resultVel2;
+}
+
 __global__ void kernUpdateVelNeighborSearchScattered(
 	int N, int gridResolution, glm::vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
@@ -445,6 +492,745 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	// - Access each boid in the cell and compute velocity change from
 	//   the boids rules, if this boid is within the neighborhood distance.
 	// - Clamp the speed change before putting the new speed in vel2
+
+	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	glm::vec3 currPos = pos[index];
+
+	// Identify Grid Cell
+	float iX = glm::floor((currPos.x - gridMin.x) * inverseCellWidth);
+	float iY = glm::floor((currPos.y - gridMin.y) * inverseCellWidth);
+	float iZ = glm::floor((currPos.z - gridMin.z) * inverseCellWidth);
+
+	float checkiX = 0, checkiY = 0, checkiZ = 0;
+
+	int currGridIdx = gridIndex3Dto1D(iX, iY, iZ, gridResolution);
+	glm::vec3 currGridPos = glm::vec3(gridMin.x + iX * cellWidth, gridMin.y + iY * cellWidth, gridMin.z + iZ * cellWidth);
+	//Identify Neighbours
+
+	//check Curr Grid
+
+	//First Identify region
+	//region1
+	if (currPos.x < (currGridPos.x + (cellWidth / 2)) && currPos.y < (currGridPos.y + (cellWidth / 2)))
+	{
+		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = iY;
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = iX;
+		checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		//check Curr Grid
+
+
+		//Now check for iZ
+		if (iZ != 0 && iZ != N)
+		{
+			// iZ Region1 that is -region
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+			}
+			else
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == N)
+		{
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == 0)
+		{
+			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+	}
+
+
+	//region2
+	if (currPos.x >= (currGridPos.x + (cellWidth / 2)) && currPos.y < (currGridPos.y + (cellWidth / 2)))
+	{
+		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = iY;
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = iX;
+		checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		//check Curr Grid
+
+
+		//Now check for iZ
+		if (iZ != 0 && iZ != N)
+		{
+			// iZ Region1 that is -region
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+			}
+			else
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == N)
+		{
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == 0)
+		{
+			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+	}
+
+	//region3
+	if (currPos.x < (currGridPos.x + (cellWidth / 2)) && currPos.y >= (currGridPos.y + (cellWidth / 2)))
+	{
+		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = iY;
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = iX;
+		checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		//check Curr Grid
+
+
+		//Now check for iZ
+		if (iZ != 0 && iZ != N)
+		{
+			// iZ Region1 that is -region
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+			}
+			else
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == N)
+		{
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == 0)
+		{
+			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+	}
+
+	//region4
+	if (currPos.x >= (currGridPos.x + (cellWidth / 2)) && currPos.y >=(currGridPos.y + (cellWidth / 2)))
+	{
+		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = iY;
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		checkiX = iX;
+		checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+		checkiZ = iZ;
+		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+		{
+			// Do Something
+		}
+
+		//check Curr Grid
+
+
+		//Now check for iZ
+		if (iZ != 0 && iZ != N)
+		{
+			// iZ Region1 that is -region
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+			}
+			else
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == N)
+		{
+			if (currGridPos.z < (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+		if (iZ == 0)
+		{
+			if (currGridPos.z >= (currGridPos.z + (cellWidth / 2)))
+			{
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = glm::floor((currPos.y + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+
+				checkiX = iX;
+				checkiY = iY;
+				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
+				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
+				{
+					// Do Something
+				}
+			}
+		}
+	}
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
@@ -537,7 +1323,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 
 	//Label
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount,gridMinimum, gridInverseCellWidth
+	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth
 		, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 
 	//Sort
