@@ -23,7 +23,7 @@
 #define FIXED_FLOAT(x) std::fixed <<std::setprecision(2)<<(x) 
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 10000; // max it out at 3,000,000
+const int N_FOR_VIS = 50000; // max it out at 3,000,000
 const float DT = 0.2f;
 
 static long numberOfSteps = 0;
