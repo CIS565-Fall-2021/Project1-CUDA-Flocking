@@ -12,7 +12,7 @@
 A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>, along with two levels of optimization: a <strong>uniform grid</strong>, and a <strong>uniform grid with semi-coherent memory access</strong>.
 
 --- 
-## Highlight
+## Highlights
 
 <p align="center">
   <img src="images/outSideCube.gif" alt="Outside Cube Pic" width="640" height="360">
@@ -40,7 +40,7 @@ In this project, I investigate 3 approaches to implement the Reynolds Boids algo
 3. Coherent uniform gird approach improves upon the second approach by cutting one level of indirection when accessing the boids' data.
 
 ---
-To validate our optimizations, I plot the framerate change with an increasing number of boids for these 3 approaches. Note that the below experiment has ```scene_scale=100.0f``` because it will affect FPS based on the number of particles in the scene. Additionally, I consider 30~60 FPS to be an acceptable framerate. 
+To validate our optimization, I plot the framerate change with an increasing number of boids for these 3 approaches. Note that the below experiment has ```scene_scale=100.0f``` because it will affect FPS based on the number of particles in the scene. Additionally, I consider 30~60 FPS to be an acceptable framerate. 
 
 <img src="images/naive.png">
 
@@ -48,10 +48,10 @@ To validate our optimizations, I plot the framerate change with an increasing nu
 
 <img src="images/coherent.png">
 
-Based on the above 3 plots, I conclude that there is approximately **x10** efficiency improvement (in terms of the number boids the method can handle) per step going from the naive approach to the coherent uniform grid approach. For example, the naive approach can handle tens of thousands of particles, whereas the coherent grid approach can handle millions of particles with ease. Our optimizations work as expected because of two factors:
+Based on the above 3 plots, I conclude that there is approximately **x10** efficiency improvement (in terms of the number boids the method can handle) per step going from the naive approach to the coherent uniform grid approach. For example, the naive approach can handle tens of thousands of particles, whereas the coherent grid approach can handle millions of particles with ease. Our optimization works as expected because of two factors:
 
-1. We cull tons of neighbor checks by only checking particles in at most 8 cells. 
-2. We eliminate the need for another indirection happened when accessing the position/velocity arrays. This is done by reshuffling them so that all the velocities and positions of boids in one cell are contiguous in memory. 
+1. We have culled tons of neighbor checks by only checking particles in at most 8 cells. 
+2. We have eliminated the need for another indirection happened when accessing the position/velocity arrays. This is done by reshuffling them so that all the velocities and positions of boids in one cell are contiguous in memory. 
 
 Furthermore, the program runs more efficiently without visualization. Drawing all the boids in OpenGL takes time and resources. 
 
@@ -65,10 +65,10 @@ We also plot framerate change with increasing block size to investigate the effe
 
 <img src="images/blocksize.png">
 
-At ```blocksize=1024```, I achieve the highest framerate. 
+At ```blocksize=1024```, the program achieves the highest framerate. 
 
 ---
-In this implementation, the cell width of the uniform grid is hardcoded to be twice the neighborhood distance. Therefore, I can get away with at most 8 neighbor cell checks. However, if I change the cell width to be the neighborhood distance, 27 neighboring cells will need to be checked. To investigate this further, two setups are used to compare the performance: 
+In this implementation, the cell width of the uniform grid is hardcoded to be twice the neighborhood distance. Therefore, the program can get away with at most 8 neighbor cell checks. However, if I change the cell width to be the neighborhood distance, 27 neighboring cells will need to be checked. To investigate this further, two setups are used to compare the performance: 
 
 1. Uniform grid approach with 50000 
 2. Uniform grid approach with 500000
