@@ -441,7 +441,8 @@ __device__ glm::vec3 computeVelocityChange2(int iSelf, thrust::device_vector<int
 
 	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
 
-	for (int i = 0; i < arrayIndices.size(); i++)
+	int arrSize = arrayIndices.size();
+	for (int i = 0; i < arrSize; i++)
 	{
 
 		float distance = glm::distance(pos[iSelf], pos[i]);
@@ -478,6 +479,16 @@ __device__ glm::vec3 computeVelocityChange2(int iSelf, thrust::device_vector<int
 	return resultVel2;
 }
 
+__device__ void populateArray(int neightbourIdx, thrust::device_vector<int>& arrayIndices,
+	int* gridCellStartIndices, int* gridCellEndIndices)
+{
+	// Do Something
+	for (int i = gridCellStartIndices[neightbourIdx]; i <= gridCellEndIndices[neightbourIdx]; i++)
+	{
+		arrayIndices.push_back(i);
+	}
+}
+
 __global__ void kernUpdateVelNeighborSearchScattered(
 	int N, int gridResolution, glm::vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
@@ -497,6 +508,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	glm::vec3 currPos = pos[index];
 
+	thrust::device_vector<int> arrayIndices;
 	// Identify Grid Cell
 	float iX = glm::floor((currPos.x - gridMin.x) * inverseCellWidth);
 	float iY = glm::floor((currPos.y - gridMin.y) * inverseCellWidth);
@@ -519,7 +531,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -527,7 +540,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = iX;
@@ -535,7 +549,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		//check Curr Grid
@@ -552,7 +567,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -560,7 +576,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -568,7 +585,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -576,7 +594,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 			}
@@ -587,7 +606,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -595,7 +615,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -603,7 +624,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -611,7 +633,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -624,7 +647,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -632,7 +656,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -640,7 +665,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -648,7 +674,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -661,7 +688,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -669,7 +697,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -677,7 +706,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -685,7 +715,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -700,7 +731,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -708,7 +740,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = iX;
@@ -716,7 +749,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		//check Curr Grid
@@ -733,7 +767,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -741,7 +776,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -749,7 +785,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -757,7 +794,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 			}
@@ -768,7 +806,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -776,7 +815,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -784,7 +824,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -792,7 +833,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -805,7 +847,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -813,7 +856,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -821,7 +865,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -829,7 +874,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -842,7 +888,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -850,7 +897,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -858,7 +906,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -866,7 +915,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -880,7 +930,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -888,7 +939,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = iX;
@@ -896,7 +948,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		//check Curr Grid
@@ -913,7 +966,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -921,7 +975,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -929,7 +984,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -937,7 +993,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 			}
@@ -948,7 +1005,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -956,7 +1014,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -964,7 +1023,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -972,7 +1032,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -985,7 +1046,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -993,7 +1055,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1001,7 +1064,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1009,7 +1073,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -1022,7 +1087,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x - (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1030,7 +1096,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1038,7 +1105,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1046,7 +1114,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -1060,7 +1129,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1068,7 +1138,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		checkiX = iX;
@@ -1076,7 +1147,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		checkiZ = iZ;
 		if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 		{
-			// Do Something
+			int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+			populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 		}
 
 		//check Curr Grid
@@ -1093,7 +1165,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1101,7 +1174,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1109,7 +1183,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1117,7 +1192,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 			}
@@ -1128,7 +1204,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1136,7 +1213,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1144,7 +1222,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1152,7 +1231,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -1165,7 +1245,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1173,7 +1254,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1181,7 +1263,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1189,7 +1272,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z - (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
@@ -1202,7 +1286,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = glm::floor((currPos.x + (cellWidth / 2) - gridMin.x) * inverseCellWidth);
@@ -1210,7 +1295,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1218,7 +1304,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 
 				checkiX = iX;
@@ -1226,11 +1313,20 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				checkiZ = glm::floor((currPos.z + (cellWidth / 2) - gridMin.z) * inverseCellWidth);
 				if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx)
 				{
-					// Do Something
+					int neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
+					populateArray(neightbourIdx, arrayIndices, gridCellStartIndices, gridCellEndIndices);
 				}
 			}
 		}
 	}
+
+
+	//Clamp
+	glm::vec3 newVelocity = computeVelocityChange(N, index, pos, vel1);
+	newVelocity = glm::clamp(newVelocity, -1 * maxSpeed, maxSpeed);
+	vel2[index] = newVelocity;
+
+
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
@@ -1336,6 +1432,10 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 
 	kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices,
 		dev_gridCellStartIndices, dev_gridCellEndIndices);
+
+	/*kernUpdateVelNeighborSearchScattered << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum,
+		gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_thrust_particleArrayIndices,
+		dev_pos, dev_vel1, dev_vel2);*/
 }
 
 
