@@ -57,6 +57,12 @@ void checkCUDAError(const char *msg, int line = -1) {
 // indicate an empty cell
 #define NO_BOID -1
 
+// toggle for shared-memory optimization
+#define SHARED_MEMORY 0
+
+// toggle for grid-looping optimization
+#define GRID_LOOPING 0
+
 /***********************************************
 * Kernel state (pointers are device pointers) *
 ***********************************************/
@@ -444,7 +450,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   int this_index = particleArrayIndices[index];
   glm::vec3 this_pos = pos[this_index];
 
-  // find 8 neighbor cells
+#if GRID_LOOPING
+  // find neighbor cells within max_distance
   float max_distance = imax(imax(rule1Distance, rule2Distance), rule3Distance);
   glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
   int lower_x = int(offset.x - max_distance * inverseCellWidth);
@@ -453,6 +460,16 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   int upper_y = int(offset.y + max_distance * inverseCellWidth);
   int lower_z = int(offset.z - max_distance * inverseCellWidth);
   int upper_z = int(offset.z + max_distance * inverseCellWidth);
+#else
+  // find 8 neighbor cells
+  glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
+  int lower_x = (offset.x - int(offset.x)) > 0.5f ? int(offset.x) : int(offset.x) - 1;
+  int upper_x = lower_x + 1;
+  int lower_y = (offset.y - int(offset.y)) > 0.5f ? int(offset.y) : int(offset.y) - 1;
+  int upper_y = lower_y + 1;
+  int lower_z = (offset.z - int(offset.z)) > 0.5f ? int(offset.z) : int(offset.z) - 1;
+  int upper_z = lower_z + 1;
+#endif
 
   // clamp cell index
   lower_x = imax(lower_x, 0);
@@ -577,7 +594,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   int this_index = index;
   glm::vec3 this_pos = pos[this_index];
 
-  // find 8 neighbor cells
+#if GRID_LOOPING
+  // find neighbor cells within max_distance
   float max_distance = imax(imax(rule1Distance, rule2Distance), rule3Distance);
   glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
   int lower_x = int(offset.x - max_distance * inverseCellWidth);
@@ -586,6 +604,16 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   int upper_y = int(offset.y + max_distance * inverseCellWidth);
   int lower_z = int(offset.z - max_distance * inverseCellWidth);
   int upper_z = int(offset.z + max_distance * inverseCellWidth);
+#else
+  // find 8 neighbor cells
+  glm::vec3 offset = (this_pos - gridMin) * inverseCellWidth;
+  int lower_x = (offset.x - int(offset.x)) > 0.5f ? int(offset.x) : int(offset.x) - 1;
+  int upper_x = lower_x + 1;
+  int lower_y = (offset.y - int(offset.y)) > 0.5f ? int(offset.y) : int(offset.y) - 1;
+  int upper_y = lower_y + 1;
+  int lower_z = (offset.z - int(offset.z)) > 0.5f ? int(offset.z) : int(offset.z) - 1;
+  int upper_z = lower_z + 1;
+#endif
 
   // clamp cell index
   lower_x = imax(lower_x, 0);
