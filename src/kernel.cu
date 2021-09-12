@@ -83,11 +83,8 @@ thrust::device_ptr<int> dev_thrust_particleGridIndices;
 int *dev_gridCellStartIndices; // What part of dev_particleArrayIndices belongs
 int *dev_gridCellEndIndices;   // to this cell?
 
-// TODO-2.3 - consider what additional buffers you might need to reshuffle
-// the position and velocity data to be coherent within cells.
 glm::vec3 *dev_sortedPos;
 glm::vec3 *dev_sortedVel1;
-thrust::device_ptr<glm::vec3> dev_thrust_vel2;
 
 // LOOK-2.1 - Grid parameters based on simulation parameters.
 // These are automatically computed for you in Boids::initSimulation
@@ -171,7 +168,6 @@ void Boids::initSimulation(int N) {
   gridMinimum.y -= halfGridWidth;
   gridMinimum.z -= halfGridWidth;
 
-  // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
   cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
   cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
 
@@ -183,8 +179,6 @@ void Boids::initSimulation(int N) {
 
   cudaMalloc((void**)&dev_sortedPos, N * sizeof(glm::vec3));
   cudaMalloc((void**)&dev_sortedVel1, N * sizeof(glm::vec3));
-
-  dev_thrust_vel2 = thrust::device_ptr<glm::vec3>(dev_vel2);
 
   cudaDeviceSynchronize();
 }
@@ -285,7 +279,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 }
 
 /**
-* TODO-1.2 implement basic flocking
+* Implement basic flocking
 * For each of the `N` bodies, update its position based on its current velocity.
 */
 __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
@@ -334,12 +328,7 @@ __global__ void kernUpdatePos(int N, float dt, glm::vec3 *pos, glm::vec3 *vel) {
   pos[index] = thisPos;
 }
 
-// LOOK-2.1 Consider this method of computing a 1D index from a 3D grid index.
-// LOOK-2.3 Looking at this method, what would be the most memory efficient
-//          order for iterating over neighboring grid cells?
-//          for(x)
-//            for(y)
-//             for(z)? Or some other order?
+// computes a 1D index from a 3D grid index.
 __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution) {
   return x + y * gridResolution + z * gridResolution * gridResolution;
 }
@@ -473,7 +462,6 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 	int iSelf = particleArrayIndices[index];
 	glm::vec3 boidPos = pos[iSelf];
-	int boidPos_x = boidPos.x;
 
 	// Identify the grid cell that this particle is in
 	int gridCell_x = floor((boidPos.x - gridMin.x) * inverseCellWidth);
@@ -564,15 +552,6 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   float inverseCellWidth, float cellWidth,
   int *gridCellStartIndices, int *gridCellEndIndices,
   glm::vec3 *pos, glm::vec3 *vel1, glm::vec3 *vel2) {
-  // TODO-2.3 - This should be very similar to kernUpdateVelNeighborSearchScattered,
-  // except with one less level of indirection.
-  // This should expect gridCellStartIndices and gridCellEndIndices to refer
-  // directly to pos and vel1.
-
-  // - For each cell, read the start/end indices in the boid pointer array.
-  //   DIFFERENCE: For best results, consider what order the cells should be
-  //   checked in to maximize the memory benefits of reordering the boids data.
- 
 
 	// get thread index
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -601,13 +580,11 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	if (speed > maxSpeed) {
 		newVel = (newVel / speed) * maxSpeed;
 	}
-
-	float newVel_x = newVel.x;
-	float newVel_y = newVel.y;
-	float newVel_z = newVel.z;
 	vel2[index] = newVel;
 }
 
+// sort the pos and vel1 arrays given their boid positions in particleArrayIndices
+// helper func to stepSimulationCoherent
 __global__ void kernSortPosVelArrays(int *particleArrayIndices, glm::vec3 *sortedPos, glm::vec3 *sortedVel1,
 									 const glm::vec3 *pos, const glm::vec3 *vel1) {
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -669,24 +646,8 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
-  // TODO-2.3 - start by copying Boids::stepSimulationNaiveGrid
-  // Uniform Grid Neighbor search using Thrust sort on cell-coherent data.
-  // In Parallel:
-  // - Label each particle with its array index as well as its grid index.
-  //   Use 2x width grids
-  // - Unstable key sort using Thrust. A stable sort isn't necessary, but you
-  //   are welcome to do a performance comparison.
-  // - Naively unroll the loop for finding the start and end indices of each
-  //   cell's data pointers in the array of boid indices
-  // - BIG DIFFERENCE: use the rearranged array index buffer to reshuffle all
-  //   the particle data in the simulation array.
-  //   CONSIDER WHAT ADDITIONAL BUFFERS YOU NEED
-  // - Perform velocity updates using neighbor search
-  // - Update positions
-  // - Ping-pong buffers as needed. THIS MAY BE DIFFERENT FROM BEFORE.
 
   // label each particle with its array index as well as its grid index.
-  // TODO? Use 2x width grids.
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 	kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth,
 		dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
@@ -715,13 +676,14 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 		(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, 
 		 dev_gridCellEndIndices, dev_sortedPos, dev_sortedVel1, dev_vel2);
 
-	// sort vel2 so that it's in boid order again
-	thrust::sort_by_key(dev_thrust_particleArrayIndices, dev_thrust_particleArrayIndices + numObjects, dev_thrust_vel2);
-
 	// Update positions
-	kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
+	kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_sortedPos, dev_vel2);
 
 	// Ping-pong buffers as needed
+	glm::vec3 *tmpPos = dev_pos;
+	dev_pos = dev_sortedPos;
+	dev_sortedPos = tmpPos;
+
 	glm::vec3 *tmp = dev_vel1;
 	dev_vel1 = dev_vel2;
 	dev_vel2 = tmp;
@@ -732,11 +694,12 @@ void Boids::endSimulation() {
   cudaFree(dev_vel2);
   cudaFree(dev_pos);
 
-  // TODO-2.1 TODO-2.3 - Free any additional buffers here.
   cudaFree(dev_particleArrayIndices);
   cudaFree(dev_particleGridIndices);
   cudaFree(dev_gridCellStartIndices);
   cudaFree(dev_gridCellEndIndices);
+  cudaFree(dev_sortedPos);
+  cudaFree(dev_sortedVel1);
 }
 
 void Boids::unitTest() {
