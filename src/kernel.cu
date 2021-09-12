@@ -398,26 +398,33 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   // This is basically a parallel unrolling of a loop that goes
   // "this index doesn't match the one before it, must be a new cell!"
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+  int prevIndex = index - 1;
 
   if (index >= N)
     return;
 
-  int i = 0;
-  bool startFound = false;
-  bool endFound = false;
-  while (!endFound)
+  int cellIndex = particleGridIndices[index];
+  if (index == 0)
   {
-    if (!startFound && particleGridIndices[i] == index)
+    // This is the first boid we index
+    gridCellStartIndices[cellIndex] = index;
+  }
+  else if (index == (N - 1))
+  {
+    // This is the last boid we are indexing.
+    gridCellEndIndices[cellIndex] = index;
+  }
+  else
+  {
+    int prevCellIndex = particleGridIndices[prevIndex];
+    if (prevCellIndex != cellIndex)
     {
-      gridCellStartIndices[index] = i;
-      startFound = true;
+      // This boid is the start of new cell
+      gridCellStartIndices[cellIndex] = index;
+
+      // Previous boid was the last boid of the previous cell
+      gridCellEndIndices[prevCellIndex] = prevIndex;
     }
-    else if (startFound && particleGridIndices[i] != index)
-    {
-      gridCellEndIndices[index] = i - 1;
-      endFound = true;
-    }
-    i++;
   }
 }
 
