@@ -596,7 +596,6 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 				continue;
 			}
 
-
 			selfToThem = pos[i] - pos[iSelf];
 
 			float distanceToBoid = glm::sqrt(glm::dot(selfToThem, selfToThem));
@@ -749,8 +748,8 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   dev_thrust_shuffledArrayIndices1 = thrust::device_ptr<int>(dev_shuffledArrayIndices1);
   dev_thrust_shuffledArrayIndices2 = thrust::device_ptr<int>(dev_shuffledArrayIndices2);
 
-  thrust::copy(dev_thrust_particleArrayIndices,
-  		dev_thrust_particleArrayIndices + numObjects,
+  thrust::copy(dev_thrust_particleGridIndices,
+  		dev_thrust_particleGridIndices + numObjects,
 			dev_thrust_shuffledArrayIndices1);
   thrust::sort_by_key(dev_thrust_particleGridIndices,
   										dev_thrust_particleGridIndices + numObjects,
@@ -780,14 +779,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
   										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_vel1);
-
-	thrust::copy(dev_thrust_shuffledArrayIndices1,
-		dev_thrust_shuffledArrayIndices1 + numObjects,
-		dev_thrust_shuffledArrayIndices2);
-	thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
-		dev_thrust_shuffledArrayIndices2 + numObjects,
-		dev_vel2);
-											
 											
   // determine unshuffle order. enumerate one index buffer then sort it by a copy of
   // the original
