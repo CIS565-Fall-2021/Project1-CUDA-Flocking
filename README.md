@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="Logo" width="600" height="600">
+  <img src="images/logo.png" alt="Logo" width="300" height="300">
   <h2 align="center">Author: (Charles) Zixin Zhang</h2>
   <p align="center">
     A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>
