@@ -45,11 +45,11 @@ void checkCUDAError(const char *msg, int line = -1) {
 #define rule2Distance 3.0f
 #define rule3Distance 5.0f
 
-#define rule1Scale 0.005f
+#define rule1Scale 0.008f
 #define rule2Scale 0.1f
 #define rule3Scale 0.01f
 
-#define maxSpeed 15.0f
+#define maxSpeed 10.0f
 
 /*! Size of the starting area in simulation space. */
 #define scene_scale 100.0f
@@ -490,11 +490,40 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   int index = (blockIdx.x * blockDim.x) + threadIdx.x;
   if (index >= 0 && index < N) {
     int boidIndex = particleArrayIndices[index];
-    glm::ivec3 iGridCoords(glm::floor((pos[boidIndex] - gridMin) * inverseCellWidth));
+    glm::vec3 fGridCoords = (pos[boidIndex] - gridMin) * inverseCellWidth;
+    glm::ivec3 iGridCoords(glm::floor(fGridCoords));
+    glm::ivec3 searchDirection(
+        (fGridCoords.x - iGridCoords.x) > 0.5f ? 1 : -1, 
+        (fGridCoords.y - iGridCoords.y) > 0.5f ? 1 : -1,
+        (fGridCoords.z - iGridCoords.z) > 0.5f ? 1 : -1);
 
     VelocityCalculationInfo calculationInfo = initVelocityCalculationInfo(N, boidIndex, pos, vel1);
 
     // will preserve cache locality except in the case we need to wrap around the boundaries
+
+    // CHECK 8 CELLS
+    /**/
+    for (int i = 0; i < 2; ++i) {
+      int z = (iGridCoords.z + i * searchDirection.z) % gridResolution;
+      for (int j = 0; j < 2; ++j) {
+        int y = (iGridCoords.y + j * searchDirection.y) % gridResolution;
+        for (int k = 0; k < 2; ++k) {
+          int x = (iGridCoords.x + k * searchDirection.x) % gridResolution;
+          int gridIndex = gridIndex3Dto1D(x, y, z, gridResolution);
+          int gridStart = gridCellStartIndices[gridIndex];
+          int gridEnd = gridCellEndIndices[gridIndex];
+          // check all boids in this cell
+          for (int l = gridStart; l < gridEnd; ++l) {
+            if (l != index) {
+              accumulateBoidContribution(particleArrayIndices[l], calculationInfo);
+            }
+          }
+        }
+      }
+    }/**/
+
+    // CHECK 27 CELLS
+    /** /
     for (int dz = -1; dz <= 1; ++dz) {
       int z = (iGridCoords.z + dz) % gridResolution;
       for (int dy = -1; dy <= 1; ++dy) {
@@ -512,7 +541,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
           }
         }
       }
-    }
+    }/**/
 
     vel2[boidIndex] = vel1[boidIndex] + evaluateVelocityCalculationInfo(calculationInfo);
 
