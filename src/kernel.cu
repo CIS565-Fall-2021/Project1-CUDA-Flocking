@@ -6,6 +6,8 @@
 #include "utilityCore.hpp"
 #include "kernel.h"
 
+#define GRID_LOOPING_OPTIMIZATION 0
+
 // LOOK-2.1 potentially useful for doing grid-based neighbor search
 #ifndef imax
 #define imax( a, b ) ( ((a) > (b)) ? (a) : (b) )
@@ -501,12 +503,22 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
     glm::vec3 selfPos = pos[index];
     glm::vec3 gridPos = (selfPos - gridMin) * inverseCellWidth;
+#if GRID_LOOPING_OPTIMIZATION
+    float maxDist = imax(imax(rule1Distance, rule2Distance), rule3Distance);
+    int xLower = imax(gridPos.x - maxDist * inverseCellWidth, 0.f);
+    int xUpper = imin(gridPos.x + maxDist * inverseCellWidth, gridResolution - 1);
+    int yLower = imax(gridPos.y - maxDist * inverseCellWidth, 0.f);
+    int yUpper = imin(gridPos.y + maxDist * inverseCellWidth, gridResolution - 1);
+    int zLower = imax(gridPos.z - maxDist * inverseCellWidth, 0.f);
+    int zUpper = imin(gridPos.z + maxDist * inverseCellWidth, gridResolution - 1);
+#else
     int xLower = imax(gridPos.x - 0.5f, 0.f);
     int xUpper = imin(gridPos.x + 0.5f, gridResolution - 1);
     int yLower = imax(gridPos.y - 0.5f, 0.f);
     int yUpper = imin(gridPos.y + 0.5f, gridResolution - 1);
     int zLower = imax(gridPos.z - 0.5f, 0.f);
     int zUpper = imin(gridPos.z + 0.5f, gridResolution - 1);
+#endif
     for (int z = zLower; z <= zUpper; ++z) {
         for (int y = yLower; y <= yUpper; ++y) {
             for (int x = xLower; x <= xUpper; ++x) {
