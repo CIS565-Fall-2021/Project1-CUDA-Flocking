@@ -18,10 +18,10 @@ Boids are meant to imitate the flocking behaviors of migrating birds or schools 
 The application of these rules lends itself to a high-degree of parallelization, thus they have been implemented across threads on GPU cores. The pseudocode for implementing these rules was provided in the [instructions](INSTRUCTION.md).
 
 Early on in execution the boids are scattered randomly throughout the space
-<img src="images/Beginning.png">
+<img src="images/Beginning.PNG">
 
 As the simulation progresses, boids begin to travel in flocks with their neighbors forming groups
-<img src="images/End.png">
+<img src="images/End.PNG">
 
 This is how the boids look moving around in their flocks
 <img src="images/FlockingDemo.gif">
