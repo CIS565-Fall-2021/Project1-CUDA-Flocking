@@ -172,8 +172,8 @@ void Boids::initSimulation(int N) {
 	cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
 	cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
 
-	cudaMalloc((void**)&dev_gridCellStartIndices, N * sizeof(int));
-	cudaMalloc((void**)&dev_gridCellEndIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_gridCellStartIndices, gridCellCount * sizeof(int));
+	cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
 
 
   cudaDeviceSynchronize();
@@ -576,6 +576,7 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 																										 dev_gridCellStartIndices,
 																										 dev_gridCellEndIndices);
   checkCUDAErrorWithLine("kernIdentifyCellStartEnd failed!");
+
   // - Perform velocity updates using neighbor search
   kernUpdateVelNeighborSearchScattered<<<numObjects, blockSize>>>(numObjects,
   																																gridSideCount,
@@ -589,9 +590,11 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 																																	dev_vel1,
 																																	dev_vel2);
   checkCUDAErrorWithLine("kernUpdateVelocityNeighborSearchScattered failed!");
+
   // - Update positions
-  kernUpdatePos<<<numObjects, blockSize>>>(numObjects, dt, dev_pos, dev_vel1);
+  kernUpdatePos<<<numObjects, blockSize>>>(numObjects, dt, dev_pos, dev_vel2);
   checkCUDAErrorWithLine("kernUpdatePos failed!");
+
   // - Ping-pong buffers as needed
   glm::vec3 *tmp = dev_vel1;
   dev_vel1 = dev_vel2;
