@@ -45,7 +45,7 @@ In this project, I investigate 3 approaches to implement the Reynolds Boids algo
 3. Coherent uniform gird approach improves upon the second approach by cutting one level of indirection when accessing the boids' data.
 
 ---
-To validate our optimization, I use ```Matplotlib``` to plot the framerate change with an increasing number of boids for these 3 approaches. Note that the below experiment has ```scene_scale=100.0f``` because it will affect FPS based on the number of particles in the scene. Additionally, I consider 30~60 FPS to be an acceptable framerate. 
+To validate our optimization, I use ```Matplotlib``` to plot the framerate change with an increasing number of boids for these 3 approaches. Average framerate is observed visually. Note that the below experiment has ```scene_scale=100.0f``` because it will affect FPS based on the number of particles in the scene. Additionally, I consider 30~60 FPS to be an acceptable framerate. 
 
 <img src="images/naive.png">
 
