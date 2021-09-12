@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="Logo" width="300" height="300">
+  <img src="images/logo.png" alt="Logo" width="150" height="150">
   <h2 align="center">Author: (Charles) Zixin Zhang</h2>
   <p align="center">
     A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>
@@ -10,10 +10,10 @@
 
 A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>, along with two levels of optimization: a <strong>uniform grid</strong>, and a <strong>uniform grid with semi-coherent memory access</strong>.
 
-## Hightlight
+## Highlight
 
-<img src="images/outSideCube.gif" alt="Logo" width="640" height="360">
-<img src="images/insideCube.gif" alt="Logo" width="640" height="360">
+<img src="images/outSideCube.gif" alt="Outside Cube Pic" width="640" height="360">
+<img src="images/insideCube.gif" alt="Inside Cube Pic" width="640" height="360">
 
 Stats: 
 - CPU: i7-10700F @ 2.90GHz
