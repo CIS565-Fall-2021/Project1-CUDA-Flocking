@@ -179,10 +179,10 @@ void Boids::initSimulation(int N) {
 	cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
 	checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
 
-	cudaMalloc((void**)&dev_gridCellStartIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_gridCellStartIndices, gridCellCount * sizeof(int));
 	checkCUDAErrorWithLine("cudaMalloc dev_gridCellStartIndices failed!");
 
-	cudaMalloc((void**)&dev_gridCellEndIndices, N * sizeof(int));
+	cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
 	checkCUDAErrorWithLine("cudaMalloc dev_gridCellEndIndices failed!");
 
 
@@ -496,7 +496,10 @@ __global__ void kernIdentifyCellStartEnd(int N, int* particleGridIndices,
 __device__ void computeVelocityChange2(int iSelf, int StartIndex, int EndIndex, int &neighborCount, glm::vec3 &center, glm::vec3 &seperation,
 	glm::vec3 &perceived_velocity,int* particleArrayIndices, glm::vec3* pos, glm::vec3* vel1)
 {
-
+	if (StartIndex == -1 || EndIndex == -1)
+	{
+		return;
+	}
 	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
 
 	for (int i = StartIndex; i <= EndIndex; i++)
@@ -1589,8 +1592,10 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 
 	//
 	//First Initialise All Start and End buffers to -1
-	kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellStartIndices, -1);
-	kernResetIntBuffer << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellEndIndices, -1);
+
+	dim3 CellfullBlocksPerGrid((gridCellCount + blockSize - 1) / blockSize);
+	kernResetIntBuffer << <CellfullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellStartIndices, -1);
+	kernResetIntBuffer << <CellfullBlocksPerGrid, blockSize >> > (numObjects, dev_gridCellEndIndices, -1);
 
 	kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices,
 		dev_gridCellStartIndices, dev_gridCellEndIndices);
@@ -1601,9 +1606,11 @@ void Boids::stepSimulationScatteredGrid(float dt) {
 
 	kernUpdatePos << <fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_pos, dev_vel2);
 	glm::vec3* temp;
-	temp = dev_vel1;
-	dev_vel1 = dev_vel2;
-	dev_vel2 = temp;
+
+	thrust::swap(dev_vel1, dev_vel2);
+	//temp = dev_vel1;
+	//dev_vel1 = dev_vel2;
+	//dev_vel2 = temp;
 }
 
 
