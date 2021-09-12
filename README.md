@@ -8,7 +8,10 @@
 
 --- 
 ## About The Project
+<p align="center">
 <img src="images/logo.gif" alt="Outside Cube Pic" width="400" height="400">
+</p>
+
 
 A flocking simulation based on the <strong>Reynolds Boids algorithm</strong>, along with two levels of optimization: a <strong>uniform grid</strong>, and a <strong>uniform grid with semi-coherent memory access</strong>.
 
