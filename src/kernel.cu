@@ -95,8 +95,6 @@ float gridCellWidth;
 float gridInverseCellWidth;
 glm::vec3 gridMinimum;
 
-int testHost[5000];
-
 /******************
 * initSimulation *
 ******************/
@@ -228,7 +226,7 @@ __global__ void kernCopyVelocitiesToVBO(int N, glm::vec3 *vel, float *vbo, float
 }
 
 /**
-* Wrapper for call to the kernCopyboidsToVBO CUDA kernel. Added coherent grid to toggle pos buffer drawing
+* Wrapper for call to the kernCopyboidsToVBO CUDA kernel.
 */
 void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) {
   dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
