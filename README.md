@@ -9,7 +9,7 @@ Submission
 ====================
 
 ## GIF
-![](images/boids-small-2.gif)
+![](images/boid-small-2.gif)
 
 High number of boids: https://drive.google.com/file/d/1OR57owe2Tcw4ikUtUmHmEYstSUxrT7kX/view?usp=sharing
 
