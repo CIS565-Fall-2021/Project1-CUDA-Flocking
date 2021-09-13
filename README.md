@@ -5,6 +5,9 @@ Project 1 - Flocking**
   * [LinkedIn](https://www.linkedin.com/in/lindsay-j-smith/), [personal website](https://lindsays-portfolio-d6aa5d.webflow.io/)
 * Tested on: Windows 10, i7-11800H 144Hz 16GB RAM, GeForce RTX 3060 512GB SSD (Personal Laptop)
 
+# Screenshot
+![2.1](images/Screenshot1.png)
+
 # Questions
 
 ### For each implementation, how does changing the number of boids affect performance? Why do you think this is?
