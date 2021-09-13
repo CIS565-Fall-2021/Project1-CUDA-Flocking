@@ -27,14 +27,15 @@ Increasing the number of total boids will not increase the local boid density no
 
 - Coherent uniform grid: The coherent uniform grid appraoch clearly saves all the computation that the normal uniform grid implementation did above. In addition it resolves the cache non-locality we saw since now the position and velocity buffers are reordered by grid cell id during the sorting step. This is so that when we iterate over boids in a cell and in adjacent cells, the retrieved cache line will contain the boid data in the same order that we will be iterating through it. When increasing the number of total boids, the performance will still be bound on the usage of global memory instead of shared memory.
 
-2) _For each implementation, how does changing the block count and block size
-affect performance? Why do you think this is?_
-
-3) _For the coherent uniform grid: did you experience any performance improvements
+2) _For the coherent uniform grid: did you experience any performance improvements
 with the more coherent uniform grid? Was this the outcome you expected?
 Why or why not?_
 - There did not appear to be a difference in framerate at 50,000 boids when the visuals were enabled, both were hovering around 550 fps. At 70,000 boids with the visualization off the difference was more clear, the uniform grid was struggling at around 8 fps while the coherent uniform grid was comfortably hovering around 290 fps.
 
-4) _Did changing cell width and checking 27 vs 8 neighboring cells affect performance?_
+3) _Did changing cell width and checking 27 vs 8 neighboring cells affect performance?_
 - Using 8 cells (2x2x2 cube) instead of 27 (3x3x3 cube) was slightly faster not necessarily because it was less cells, but because a 3x3x3 cube has 9 disjoint memory segments that need to be fetched while a 2x2x2 cube only has 4 disjoint memory segments. This is determined by looking at which cells in each cube are contiguous with other cells in memory. Then, we need to see how many disjoint groups (each group containing contiguous cells) make up the entire cube. For example, in the 2x2x2 search cube, there are 4 segments of memory that are disjoint from each other, each of which has 2 cells that are adjacent in memory. In the 3x3x3 case, there are 9 disjoint segments with 3 adjacent cells in each segment. 
+
+### Analysis
+
+![](images/FPS-per-boids.jpg)
 
