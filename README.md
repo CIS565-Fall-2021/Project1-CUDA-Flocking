@@ -51,3 +51,12 @@ Below Graphs Represent recoreded FPS with respect to the number of boids. Below 
 
 
 (images/Graph_50000.PNG)
+
+
+# Questions #
+- For Each Implementation increasing the number of Boids increase the number of checks for a boid to calculate its resultant properties. In case of Naive approach each boid is compared with every other boid leading to the worst time complexity of O(N^2). Therefore accross all the implementations we
+can clearly see a decrease in performance.
+- Changing the block count does not result in change of Performance. Since the kernels get divided up across the SMs on the GPU and each SM can run one warp at a time, there is neither an increase or decrease in performance.
+- With the coherent uniform grid Implementation the performance increases greatly. This behaviour can be attributed toward faster access time from the memory since the data is stored in contiguos memore locations and the intermediary step of memory redicrection was removed.
+- In our current Scenario decreasing the cell weidth resulted in an increase in performance. This can be attributed to decrease in the bouding volume of a grid cube. In the scenario where boids are more dispersed we end up checking lesser boids as compared to before but in a scenario where 
+boids areaccumulated closer to each other this behaviour may change. 
