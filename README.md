@@ -5,6 +5,12 @@ Project 1 - Flocking**
   * [LinkedIn](https://www.linkedin.com/in/zirui-zang/)
 * Tested on: Windows 10, AMD Ryzen 7 3700X @ 3.60GHz 32GB, RTX2070 SUPER 8GB (Personal)
 
+### YouTube Demos
+These demos have 3 million boids. This code can run 5 million boids at 30+fps.
+[Demo 1](https://youtu.be/J59e8Gvm4Nk)
+[Demo 2](https://youtu.be/M3_JNL-yDTA)
+[Demo 3](https://youtu.be/cQeCt1B_nHg)
+
 ### Screenshots
 These screenshots are cpatured with 5e5 particles simulation.
 
