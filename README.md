@@ -89,7 +89,7 @@ Although any conclusion made are very empirical, we can see that just how much b
 ### FPS as a Function of Block Size
 I ran the coherent uniform grid implementation at N=100,000 and varied the block size from 32 to 1024 by an increment of 32. As shown in the plot below, the performance changed noticeably.
 
-![](images/block-size-peformance.png)
+![](images/block-size-performance.png)
 
 
 
