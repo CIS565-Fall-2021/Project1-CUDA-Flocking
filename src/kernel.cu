@@ -402,21 +402,6 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   }
 }
 
-__device__ void getNeighboringCells(
-  glm::vec3 thisPos, int gridResolution, float inverseCellWidth, float cellWidth, glm::vec3 gridMin, int *cells) {
-  // Find nearest grid cells to the point
-
-  // shift from global position to grid 3D idx
-  glm::vec3 gridPos = (thisPos - gridMin) * inverseCellWidth;
-  glm::ivec3 gridIdx(round(gridPos.x), round(gridPos.y), round(gridPos.z));
-  
-  int i = 0;
-  for (int iZ = gridIdx.z-1; iZ <= gridIdx.z; iZ++)
-    for (int iY = gridIdx.y-1; iY <= gridIdx.y; iY++)
-      for (int iX = gridIdx.x-1; iX <= gridIdx.x; iX++)
-        cells[i++] = gridIndex3Dto1D(iX, iY, iZ, gridResolution);
-}
-
 __global__ void kernUpdateVelNeighborSearchScattered(
   int N, int gridResolution, glm::vec3 gridMin,
   float inverseCellWidth, float cellWidth,
