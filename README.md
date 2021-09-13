@@ -23,6 +23,8 @@ The simulation is implemented using three methods:
 
 ## Performance Analysis
 
+For performance analysis, framerates are observed over 20 seconds of execution.
+
 ### Number of Boids and FPS
 
 ![graph1](/images/graph1.png)
