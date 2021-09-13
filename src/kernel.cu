@@ -257,7 +257,8 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 	//int abc = N;
 
 
-	int neighborCount = 0;
+	int neighborCountCenter = 0;
+	int neighborCountPercieved = 0;
 	glm::vec3 center = glm::vec3(0, 0, 0);
 	glm::vec3 seperation = glm::vec3(0, 0, 0);
 	glm::vec3 perceived_velocity = glm::vec3(0, 0, 0);
@@ -276,7 +277,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 		if (distance < rule1Distance)
 		{
 			center += pos[i];
-			neighborCount += 1.0;
+			neighborCountCenter += 1;
 		}
 
 		// Rule 2: Separation: boids try to stay a distance d away from each other
@@ -289,14 +290,16 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 		if (distance < rule3Distance)
 		{
 			perceived_velocity += vel[i];
+			neighborCountPercieved += 1;
 		}
 	}
 
-	if (neighborCount > 0) {
-		center = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * center;
+	if (neighborCountCenter > 0) {
+		center = glm::vec3(1 / neighborCountCenter, 1 / neighborCountCenter, 1 / neighborCountCenter) * center;
 		resultVel2 += (center - pos[iSelf]) * rule1Scale;
-
-		perceived_velocity = glm::vec3(1 / neighborCount, 1 / neighborCount, 1 / neighborCount) * perceived_velocity;
+	}
+	if (neighborCountPercieved > 0) {
+		perceived_velocity = glm::vec3(1 / neighborCountPercieved, 1 / neighborCountPercieved, 1 / neighborCountPercieved) * perceived_velocity;
 		resultVel2 += perceived_velocity * rule3Scale;
 	}
 
