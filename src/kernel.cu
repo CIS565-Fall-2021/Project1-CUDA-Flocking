@@ -169,6 +169,7 @@ void Boids::initSimulation(int N)
 
   // LOOK-2.1 computing grid params
   gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+  gridCellWidth *= 0.5f;
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
   gridSideCount = 2 * halfSideCount;
 
@@ -539,21 +540,39 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   // - Identify the grid cell that this particle is in
   glm::ivec3 gridCoord(glm::floor(myGridPos));
   // - Identify which cells may contain neighbors. This isn't always 8.
-  int xNew = gridCoord.x + (glm::fract(myGridPos.x) > 0.5 ? 1 : -1);
-  int yNew = gridCoord.y + (glm::fract(myGridPos.y) > 0.5 ? 1 : -1);
-  int zNew = gridCoord.z + (glm::fract(myGridPos.z) > 0.5 ? 1 : -1);
-  xNew = xNew < 0 || xNew > gridResolution - 1 ? -1 : xNew;
-  yNew = yNew < 0 || yNew > gridResolution - 1 ? -1 : yNew;
-  zNew = zNew < 0 || zNew > gridResolution - 1 ? -1 : zNew;
-  int myGridCells[8] = {-1};
-  myGridCells[0] = gridIndex3Dto1D(gridCoord.x, gridCoord.y, gridCoord.z, gridResolution);
-  myGridCells[1] = xNew >= 0 ? gridIndex3Dto1D(xNew, gridCoord.y, gridCoord.z, gridResolution) : -1;
-  myGridCells[2] = yNew >= 0 ? gridIndex3Dto1D(gridCoord.x, yNew, gridCoord.z, gridResolution) : -1;
-  myGridCells[3] = yNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, yNew, gridCoord.z, gridResolution) : -1;
-  myGridCells[4] = zNew >= 0 ? gridIndex3Dto1D(gridCoord.x, gridCoord.y, zNew, gridResolution) : -1;
-  myGridCells[5] = zNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, gridCoord.y, zNew, gridResolution) : -1;
-  myGridCells[6] = zNew >= 0 && yNew >= 0 ? gridIndex3Dto1D(gridCoord.x, yNew, zNew, gridResolution) : -1;
-  myGridCells[7] = zNew >= 0 && yNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, yNew, zNew, gridResolution) : -1;
+  // int xNew = gridCoord.x + (glm::fract(myGridPos.x) > 0.5 ? 1 : -1);
+  // int yNew = gridCoord.y + (glm::fract(myGridPos.y) > 0.5 ? 1 : -1);
+  // int zNew = gridCoord.z + (glm::fract(myGridPos.z) > 0.5 ? 1 : -1);
+  // xNew = xNew < 0 || xNew > gridResolution - 1 ? -1 : xNew;
+  // yNew = yNew < 0 || yNew > gridResolution - 1 ? -1 : yNew;
+  // zNew = zNew < 0 || zNew > gridResolution - 1 ? -1 : zNew;
+  // int myGridCells[8] = {-1};
+  // myGridCells[0] = gridIndex3Dto1D(gridCoord.x, gridCoord.y, gridCoord.z, gridResolution);
+  // myGridCells[1] = xNew >= 0 ? gridIndex3Dto1D(xNew, gridCoord.y, gridCoord.z, gridResolution) : -1;
+  // myGridCells[2] = yNew >= 0 ? gridIndex3Dto1D(gridCoord.x, yNew, gridCoord.z, gridResolution) : -1;
+  // myGridCells[3] = yNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, yNew, gridCoord.z, gridResolution) : -1;
+  // myGridCells[4] = zNew >= 0 ? gridIndex3Dto1D(gridCoord.x, gridCoord.y, zNew, gridResolution) : -1;
+  // myGridCells[5] = zNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, gridCoord.y, zNew, gridResolution) : -1;
+  // myGridCells[6] = zNew >= 0 && yNew >= 0 ? gridIndex3Dto1D(gridCoord.x, yNew, zNew, gridResolution) : -1;
+  // myGridCells[7] = zNew >= 0 && yNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, yNew, zNew, gridResolution) : -1;
+  int myGridCells[27] = {-1};
+  for (int i = -1; i <= 1; i++)
+  {
+    for (int j = -1; j <= 1; j++)
+    {
+      for (int k = -1; k <= 1; k++)
+      {
+        auto xNew = gridCoord.x + k;
+        xNew = xNew < 0 || xNew > gridResolution - 1 ? -1 : xNew;
+        auto yNew = gridCoord.y + j;
+        yNew = yNew < 0 || yNew > gridResolution - 1 ? -1 : yNew;
+        auto zNew = gridCoord.z + i;
+        zNew = zNew < 0 || zNew > gridResolution - 1 ? -1 : zNew;
+        myGridCells[k + 1 + (j + 1) * 3 + (i + 1) * 9] =
+            zNew >= 0 && yNew >= 0 && xNew >= 0 ? gridIndex3Dto1D(xNew, yNew, zNew, gridResolution) : -1;
+      }
+    }
+  }
   // - For each cell, read the start/end indices in the boid pointer array.
   // - Access each boid in the cell and compute velocity change from
   //   the boids rules, if this boid is within the neighborhood distance.
@@ -562,7 +581,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   glm::vec3 c(0);
   glm::vec3 perceivedVelocity(0);
   int neighbors2 = 0;
-  for (int i = 0; i < 8; i++)
+  // for (int i = 0; i < 8; i++)
+  for (int i = 0; i < 27; i++)
   {
     if (myGridCells[i] == -1)
     {

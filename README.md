@@ -25,7 +25,9 @@ Naive barely handles 50k Boids
 <img src="images/naiveIsSlow.png">
 
 ### Uniform Grid
-
+Uniform Grid handles 50k Boids just fine
+<br>
+<img src="images/uniformIsFine.png">
 
 ## Performance
 Visualize On
@@ -39,20 +41,18 @@ Visualize Off
 * As the number of boids increases, the naive approach does not scale
 * At lower boid numbers, the coherent approach incurs overhead from reshuffling arrays but with more boids, the memory indirection time saved overcomes this
 
+Block Size
+<br>
+<img src="images/blocksize.svg">
+
 ## Questions
 * Increasing the boids increases the number of computations needed. With the naive 
 implmentation acting on every pair, it is O(n^2) while for the spatial grid based
 implementations, the repelling behavior at close distances means that we should not 
 hit the strict n choose 2 case. 
-* For each implementation, how does changing the block count and block size
-affect performance? Why do you think this is?
+* Each Streaming Multiprocessor runs one warp at a time so as long as all the SMs are saturated, 
+there should not be a significant difference
 * The coherent grid trades some extra copies and assigns to avoid reading from slow memory and needing to refresh the cache. With a small number of boids, the overhead outweighs the time saved but large boid numbers is where it shines
-* Did changing cell width and checking 27 vs 8 neighboring cells affect performance?
-Why or why not? Be careful: it is insufficient (and possibly incorrect) to say
-that 27-cell is slower simply because there are more cells to check!
+* The performance was slightly slower but perhaps it could have benefits as the physical area being checked is smaller, it just has to be done in a way that the extra checks overhead is compensated for by the time saved checking a smaller area, perhaps with high boid density and large grid squares. As it currently was for 
+50,000 boids on the coherent implmentation, the fps dropped from around 360 to 333. 
 
-
-### (TODO: Your README)
-
-Include screenshots, analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
