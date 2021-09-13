@@ -162,7 +162,7 @@ void Boids::initSimulation(int N) {
 	checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
 	// LOOK-2.1 computing grid params
-	gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
+	gridCellWidth = 2 * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
 	int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
 	gridSideCount = 2 * halfSideCount;
 
@@ -295,11 +295,11 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 	}
 
 	if (neighborCountCenter > 0) {
-		center = glm::vec3(1 / neighborCountCenter, 1 / neighborCountCenter, 1 / neighborCountCenter) * center;
-		resultVel2 += (center - pos[iSelf]) * rule1Scale;
+		center = (center / (float)neighborCountCenter - pos[iSelf]);
+		resultVel2 += (center) * rule1Scale;
 	}
 	if (neighborCountPercieved > 0) {
-		perceived_velocity = glm::vec3(1 / neighborCountPercieved, 1 / neighborCountPercieved, 1 / neighborCountPercieved) * perceived_velocity;
+		perceived_velocity = perceived_velocity/ (float)neighborCountPercieved;
 		resultVel2 += perceived_velocity * rule3Scale;
 	}
 
@@ -319,7 +319,7 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3* pos,
 	if (index >= N) {
 		return;
 	}
-	glm::vec3 newVelocity = computeVelocityChange(N, index, pos, vel1);
+	glm::vec3 newVelocity = vel1[index] + computeVelocityChange(N, index, pos, vel1);
 
 	// Clamp the speed
 	newVelocity = glm::clamp(newVelocity, -1 * maxSpeed, maxSpeed);
@@ -715,12 +715,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 			checkiX = iX;
 			checkiY = iY - 1;
 			checkiZ = iZ + 1;
-			if (gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution) != currGridIdx && (checkiX >= 0 && checkiX <= gridResolution - 1) && (checkiY >= 0 && checkiY <= gridResolution - 1) && (checkiZ >= 0 && checkiZ <= gridResolution - 1))
-			{
 				neightbourIdx = gridIndex3Dto1D(checkiX, checkiY, checkiZ, gridResolution);
 				computeVelocityChange2(index, gridCellStartIndices[neightbourIdx], gridCellEndIndices[neightbourIdx], neighborCountCenter, neighborCountPercieved, center, seperation, perceived_velocity,
 					particleArrayIndices, pos, vel1);
-			}
 		}
 	}
 
@@ -1002,18 +999,21 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	}
 
 	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
+
+
 	if (neighborCountCenter > 0) {
-		center = glm::vec3(1 / neighborCountCenter, 1 / neighborCountCenter, 1 / neighborCountCenter) * center;
-		resultVel2 += (center - pos[index]) * rule1Scale;
+		center = (center / (float)neighborCountCenter - pos[index]);
+		resultVel2 += (center)*rule1Scale;
 	}
 	if (neighborCountPercieved > 0) {
-		perceived_velocity = glm::vec3(1 / neighborCountPercieved, 1 / neighborCountPercieved, 1 / neighborCountPercieved) * perceived_velocity;
+		perceived_velocity = perceived_velocity / (float)neighborCountPercieved;
 		resultVel2 += perceived_velocity * rule3Scale;
 	}
 
 	resultVel2 += seperation * rule2Scale;
 
-	resultVel2 += vel1[index] + resultVel2;
+	resultVel2 += vel1[index];
+	//resultVel2 = glm::length(resultVel2) >maxSpeed ? glm::normalize(resultVel2) * maxSpeed : resultVel2;
 	//Clamp
 	resultVel2 = glm::clamp(resultVel2, -1 * maxSpeed, maxSpeed);
 	vel2[index] = resultVel2;
@@ -1446,17 +1446,18 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
 	glm::vec3 resultVel2 = glm::vec3(0, 0, 0);
 	if (neighborCountCenter > 0) {
-		center = glm::vec3(1 / neighborCountCenter, 1 / neighborCountCenter, 1 / neighborCountCenter) * center;
-		resultVel2 += (center - pos[index]) * rule1Scale;
+		center = (center / (float)neighborCountCenter - pos[index]);
+		resultVel2 += (center)*rule1Scale;
 	}
 	if (neighborCountPercieved > 0) {
-		perceived_velocity = glm::vec3(1 / neighborCountPercieved, 1 / neighborCountPercieved, 1 / neighborCountPercieved) * perceived_velocity;
+		perceived_velocity = perceived_velocity / (float)neighborCountPercieved;
 		resultVel2 += perceived_velocity * rule3Scale;
 	}
 
+
 	resultVel2 += seperation * rule2Scale;
 
-	resultVel2 += vel1[index] + resultVel2;
+	resultVel2 += vel1[index];
 	//Clamp
 	resultVel2 = glm::clamp(resultVel2, -1 * maxSpeed, maxSpeed);
 	vel2[index] = resultVel2;
