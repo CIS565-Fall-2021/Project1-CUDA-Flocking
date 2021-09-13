@@ -18,8 +18,9 @@
 #define COHERENT_GRID 1
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 5000;
+const int N_FOR_VIS = 8000;
 const float DT = 0.2f;
+
 
 /**
 * C main function.
@@ -228,11 +229,31 @@ void initShaders(GLuint * program) {
 
       if (time - timebase > 1.0) {
         fps = frame / (time - timebase);
+        std::cout << fps << std::endl;
         timebase = time;
         frame = 0;
       }
 
+      float time_tight;
+      cudaEvent_t start, stop;
+
+      cudaEventCreate(&start);
+     // checkCUDAErrorWithLine("cudaEventCreate start failed!");
+      cudaEventCreate(&stop);
+     // checkCUDAErrorWithLine("cudaEventCreate stop failed!");
+      cudaEventRecord(start, 0);
+     // checkCUDAErrorWithLine("cudaEventRecord start failed!");
+
       runCUDA();
+
+      cudaEventRecord(stop, 0);
+      //checkCUDAErrorWithLine("cudaEventRecord stop failed!");
+      cudaEventSynchronize(stop);
+      //checkCUDAErrorWithLine("cudaEventSynchronize start failed!");
+      cudaEventElapsedTime(&time_tight, start, stop);
+     // checkCUDAErrorWithLine("cudaEventElapsedTime start failed!");
+
+     // printf("%3.8f \n", time_tight);
 
       std::ostringstream ss;
       ss << "[";
