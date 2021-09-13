@@ -22,10 +22,10 @@ Part 2.1: Coherent Grid method (Enhanced memory access)
 ![20000](images/20000.gif)
 
 100000 Particles
-![50000](images/50000.gif)
-
-500000 Particles
 ![100000](images/100000.gif)
+
+1000000 Particles
+![1000000](images/1000000.gif)
 
 ### Performance Summary
 ![chart](images/chart.png)
