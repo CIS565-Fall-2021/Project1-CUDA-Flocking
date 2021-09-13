@@ -15,7 +15,7 @@ Part 2.1: Grid method (Grid searching)
 ![Part 2.1](images/2-500000.png)
 
 Part 2.1: Coherent Grid method (Enhanced memory access)
-![Part 2.1](images/3-500000.png)
+![Part 2.2](images/3-500000.png)
 
 ### Gifs
 20000 Particles
