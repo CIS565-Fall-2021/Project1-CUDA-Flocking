@@ -3,7 +3,7 @@ Project 1 - Flocking**
 
 * Richard Chen
   * [LinkedIn](https://www.linkedin.com/in/richardrlchen)
-* Tested on: (TODO) Windows 11, i7-10875H @ 2.3GHz 16GB, RTX 2060 MAX-Q 6GB (Personal Computer)
+* Tested on: Windows 11, i7-10875H @ 2.3GHz 16GB, RTX 2060 MAX-Q 6GB (Personal Computer)
 
 ## Overview
 This project involved computing and rendering flocks of boids all on the GPU. 
