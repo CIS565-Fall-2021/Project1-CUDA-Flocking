@@ -19,9 +19,18 @@ Simulation Continues: Boids begin to travel in flocks with their neighbors formi
 ![50000 Boids](images/50000_BoidFlockTogether.PNG)
 
 ## Simulation Videos : 50000 Boids
-![Simulation Begins](images/SimulationBegin.mkv)
+Simulation Begins
+![Simulation Begins](images/2.gif)
 
-![Boids Flocking](images/BoidsFlocking.mkv)
+Boids Flocking
+![Boids Flocking](images/3.gif)
+
+## Simulation Videos : 100000 Boids
+Simulation Begins
+![Simulation Begins](images/4.gif)
+
+Boids Flocking
+![Boids Flocking](images/5.gif)
 
 # Implementation #
 Boids move according to three rules. These were implemented across threads to allow for a level of parallelism across GPU cores.
