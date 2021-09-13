@@ -27,6 +27,6 @@ From above plots, we can see:
 
 2. For each implementation, changing of block size does not affect performance. This is because changing of block size does not change the amount of threads we used to process data.
 
-3. The performance improves with the more coherent uniform grid. Because we reduce the random access by eliminate ```dev_particleArrayIndices``` and use contiguous memory by order boid's position and velocity in the coherent kernel.
+3. The performance improves with the more coherent uniform grid. Because we reduce the random access by eliminating ```dev_particleArrayIndices``` and use contiguous memory by ordering boid's position and velocity in the coherent kernel.
 
 4. Surprisingly, checking 27 neighboring has better performance than checking 8 neighboring. This is because we have many if statements when checking 8 neighboring. The if statements make the branch in warp diverge which results in more run time.
