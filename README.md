@@ -13,7 +13,7 @@ Several techniques were implemented in this research to simulate the movements o
 
 ## Simulation Images
 Simulation Begins: Early on in execution the boids are scattered randomly throughout the space
-![50000 Boids](images/50000_BoidFlockTogether.PNG)
+![50000 Boids](images/50000_Naive.PNG)
 
 Simulation Continues: Boids begin to travel in flocks with their neighbors forming groups
 ![50000 Boids](images/50000_BoidFlockTogether.PNG)
