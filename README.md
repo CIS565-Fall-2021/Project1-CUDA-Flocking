@@ -6,7 +6,7 @@ Project 1 - Flocking**
 * Tested on: Windows 10, i7-7700HQ @ 2.80GHz 16GB, GTX 1050 4096MB (Personal Laptop)
 
 **Demo**
-![Demo](images/recording.gif)
+![Demo](images/Recording.gif)
 
 **Performance Analysis**
 
