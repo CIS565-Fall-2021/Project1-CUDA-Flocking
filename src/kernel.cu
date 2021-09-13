@@ -37,7 +37,8 @@ void checkCUDAError(const char *msg, int line = -1) {
 *****************/
 
 /*! Block size used for CUDA kernel launch. */
-#define blockSize 128
+//#define blockSize 128
+#define blockSize 1024
 
 // LOOK-1.2 Parameters for the boids algorithm.
 // These worked well in our reference implementation.
@@ -104,6 +105,7 @@ float gridCellWidth;
 float gridInverseCellWidth;
 glm::vec3 gridMinimum;
 float dev_time_ms = 0.0;
+float dev_cell_scale;
 
 /******************
 * initSimulation *
@@ -433,8 +435,8 @@ __device__ int* find_8_neighbors(float inverseCellWidth, int gridResolution, glm
     // find the neighbors
     float probe_distance = imax(imax(rule1Distance, rule2Distance), rule3Distance);
     int self_xyzs[3];
-    int neighbor_xyzs[3];
-    int neighbor_grid_inds[] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    int neighbor_xyzs[3] = { -1 };
+    int neighbor_grid_inds[8] = { -1 };
     self_xyzs[0] = this_pos_from_edge.x * inverseCellWidth;
     self_xyzs[1] = this_pos_from_edge.y * inverseCellWidth;
     self_xyzs[2] = this_pos_from_edge.z * inverseCellWidth;
@@ -449,9 +451,6 @@ __device__ int* find_8_neighbors(float inverseCellWidth, int gridResolution, glm
         if (probe_grid_ind != self_xyzs[0] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
             neighbor_xyzs[0] = probe_grid_ind;
         }
-        else {
-            neighbor_xyzs[0] = -1;
-        }
     }
 
     probe_grid_ind = (this_pos_from_edge.y + probe_distance) * inverseCellWidth; // +y
@@ -463,9 +462,6 @@ __device__ int* find_8_neighbors(float inverseCellWidth, int gridResolution, glm
         if (probe_grid_ind != self_xyzs[1] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
             neighbor_xyzs[1] = probe_grid_ind;
         }
-        else {
-            neighbor_xyzs[1] = -1;
-        }
     }
 
     probe_grid_ind = (this_pos_from_edge.z + probe_distance) * inverseCellWidth; // +z
@@ -476,9 +472,6 @@ __device__ int* find_8_neighbors(float inverseCellWidth, int gridResolution, glm
         probe_grid_ind = (this_pos_from_edge.z - probe_distance) * inverseCellWidth; // -z
         if (probe_grid_ind != self_xyzs[2] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
             neighbor_xyzs[2] = probe_grid_ind;
-        }
-        else {
-            neighbor_xyzs[2] = -1;
         }
     }
 
@@ -510,6 +503,138 @@ __device__ int* find_8_neighbors(float inverseCellWidth, int gridResolution, glm
     return neighbor_grid_inds;
 }
 
+__device__ int* find_27_neighbors(float inverseCellWidth, int gridResolution, glm::vec3 this_pos_from_edge) {
+    // find the neighbors
+    float probe_distance = imax(imax(rule1Distance, rule2Distance), rule3Distance);
+    int self_xyzs[3];
+    int neighbor_xyzs[6] = { -1 };
+    int neighbor_grid_inds[27] = { -1 };
+    self_xyzs[0] = this_pos_from_edge.x * inverseCellWidth;
+    self_xyzs[1] = this_pos_from_edge.y * inverseCellWidth;
+    self_xyzs[2] = this_pos_from_edge.z * inverseCellWidth;
+
+    // find the xyz to combine for the 27 neighbors
+    int probe_grid_ind = (this_pos_from_edge.x + probe_distance) * inverseCellWidth; // +x
+    if (probe_grid_ind != self_xyzs[0] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[0] = probe_grid_ind;
+    }
+    probe_grid_ind = (this_pos_from_edge.x - probe_distance) * inverseCellWidth; // -x
+    if (probe_grid_ind != self_xyzs[0] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[1] = probe_grid_ind;
+    }
+
+    probe_grid_ind = (this_pos_from_edge.y + probe_distance) * inverseCellWidth; // +y
+    if (probe_grid_ind != self_xyzs[1] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[2] = probe_grid_ind;
+    }
+    probe_grid_ind = (this_pos_from_edge.y - probe_distance) * inverseCellWidth; // -y
+    if (probe_grid_ind != self_xyzs[1] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[3] = probe_grid_ind;
+    }
+
+    probe_grid_ind = (this_pos_from_edge.z + probe_distance) * inverseCellWidth; // +z
+    if (probe_grid_ind != self_xyzs[2] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[4] = probe_grid_ind;
+    }
+    probe_grid_ind = (this_pos_from_edge.z - probe_distance) * inverseCellWidth; // -z
+    if (probe_grid_ind != self_xyzs[2] && probe_grid_ind >= 0 && probe_grid_ind < gridResolution) {
+        neighbor_xyzs[5] = probe_grid_ind;
+    }
+
+    // assemble the 27 neighbors
+    neighbor_grid_inds[0] = gridIndex3Dto1D(self_xyzs[0], self_xyzs[1], self_xyzs[2], gridResolution);
+    if (neighbor_xyzs[0] != -1) { // 9 in +x
+        neighbor_grid_inds[1] = gridIndex3Dto1D(neighbor_xyzs[0], self_xyzs[1], self_xyzs[2], gridResolution);
+
+        if (neighbor_xyzs[2] != -1) {
+            neighbor_grid_inds[2] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[2], self_xyzs[2], gridResolution);
+            if (neighbor_xyzs[4] != -1) {
+                neighbor_grid_inds[3] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[2], neighbor_xyzs[4], gridResolution);
+            }
+            if (neighbor_xyzs[5] != -1) {
+                neighbor_grid_inds[4] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[2], neighbor_xyzs[5], gridResolution);
+            }
+        }
+
+        if (neighbor_xyzs[3] != -1) {
+            neighbor_grid_inds[5] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[3], self_xyzs[2], gridResolution);
+            if (neighbor_xyzs[4] != -1) {
+                neighbor_grid_inds[6] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[3], neighbor_xyzs[4], gridResolution);
+            }
+            if (neighbor_xyzs[5] != -1) {
+                neighbor_grid_inds[7] = gridIndex3Dto1D(neighbor_xyzs[0], neighbor_xyzs[3], neighbor_xyzs[5], gridResolution);
+            }
+        }
+
+        if (neighbor_xyzs[4] != -1) {
+            neighbor_grid_inds[8] = gridIndex3Dto1D(neighbor_xyzs[0], self_xyzs[1], neighbor_xyzs[4], gridResolution);
+        }
+        if (neighbor_xyzs[5] != -1) {
+            neighbor_grid_inds[9] = gridIndex3Dto1D(neighbor_xyzs[0], self_xyzs[1], neighbor_xyzs[5], gridResolution);
+        }
+    }
+
+    if (neighbor_xyzs[1] != -1) { // 9 in -x
+        neighbor_grid_inds[10] = gridIndex3Dto1D(neighbor_xyzs[1], self_xyzs[1], self_xyzs[2], gridResolution);
+
+        if (neighbor_xyzs[2] != -1) {
+            neighbor_grid_inds[11] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[2], self_xyzs[2], gridResolution);
+            if (neighbor_xyzs[4] != -1) {
+                neighbor_grid_inds[12] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[2], neighbor_xyzs[4], gridResolution);
+            }
+            if (neighbor_xyzs[5] != -1) {
+                neighbor_grid_inds[13] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[2], neighbor_xyzs[5], gridResolution);
+            }
+        }
+
+        if (neighbor_xyzs[3] != -1) {
+            neighbor_grid_inds[14] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[3], self_xyzs[2], gridResolution);
+            if (neighbor_xyzs[4] != -1) {
+                neighbor_grid_inds[15] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[3], neighbor_xyzs[4], gridResolution);
+            }
+            if (neighbor_xyzs[5] != -1) {
+                neighbor_grid_inds[16] = gridIndex3Dto1D(neighbor_xyzs[1], neighbor_xyzs[3], neighbor_xyzs[5], gridResolution);
+            }
+        }
+
+        if (neighbor_xyzs[4] != -1) {
+            neighbor_grid_inds[17] = gridIndex3Dto1D(neighbor_xyzs[1], self_xyzs[1], neighbor_xyzs[4], gridResolution);
+        }
+        if (neighbor_xyzs[5] != -1) {
+            neighbor_grid_inds[18] = gridIndex3Dto1D(neighbor_xyzs[1], self_xyzs[1], neighbor_xyzs[5], gridResolution);
+        }
+    }
+
+    if (neighbor_xyzs[2] != -1) { // 3 in +y
+        neighbor_grid_inds[19] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[2], self_xyzs[2], gridResolution);
+        if (neighbor_xyzs[4] != -1) {
+            neighbor_grid_inds[20] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[2], neighbor_xyzs[4], gridResolution);
+        }
+        if (neighbor_xyzs[5] != -1) {
+            neighbor_grid_inds[21] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[2], neighbor_xyzs[5], gridResolution);
+        }
+    }
+
+    if (neighbor_xyzs[3] != -1) { // 3 in -y
+        neighbor_grid_inds[22] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[3], self_xyzs[2], gridResolution);
+        if (neighbor_xyzs[4] != -1) {
+            neighbor_grid_inds[23] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[3], neighbor_xyzs[4], gridResolution);
+        }
+        if (neighbor_xyzs[5] != -1) {
+            neighbor_grid_inds[24] = gridIndex3Dto1D(self_xyzs[0], neighbor_xyzs[3], neighbor_xyzs[5], gridResolution);
+        }
+    }
+
+    if (neighbor_xyzs[4] != -1) { // 1 in +z
+        neighbor_grid_inds[25] = gridIndex3Dto1D(self_xyzs[0], self_xyzs[1], neighbor_xyzs[4], gridResolution);
+    }
+    if (neighbor_xyzs[5] != -1) { // 1 in -z
+        neighbor_grid_inds[26] = gridIndex3Dto1D(self_xyzs[0], self_xyzs[1], neighbor_xyzs[5], gridResolution);
+    }
+
+    return neighbor_grid_inds;
+}
+
 __global__ void kernUpdateVelNeighborSearchScattered(
     int N, int gridResolution, glm::vec3 gridMin,
     float inverseCellWidth, float cellWidth,
@@ -531,7 +656,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     }
     glm::vec3 this_pos = pos[index];
     glm::vec3 this_pos_from_edge = this_pos - gridMin;
-    int* neighbor_grid_inds = find_8_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
+    int* neighbor_grid_inds;
+    neighbor_grid_inds = find_8_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
+    //neighbor_grid_inds = find_27_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
+    
 
     // find all velcities
     glm::vec3 return_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -609,7 +737,9 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
     }
     glm::vec3 this_pos = pos[index];
     glm::vec3 this_pos_from_edge = this_pos - gridMin;
-    int* neighbor_grid_inds = find_8_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
+    int* neighbor_grid_inds;
+    neighbor_grid_inds = find_8_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
+    //neighbor_grid_inds = find_27_neighbors(inverseCellWidth, gridResolution, this_pos_from_edge);
 
     // find all velcities
     glm::vec3 return_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
