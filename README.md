@@ -8,6 +8,8 @@ Project 1 - Flocking**
 # Screenshot
 ![2.1](images/Screenshot1.png)
 
+![](images/BoidsSimulation.gif)
+
 # Questions
 
 ### For each implementation, how does changing the number of boids affect performance? Why do you think this is?
