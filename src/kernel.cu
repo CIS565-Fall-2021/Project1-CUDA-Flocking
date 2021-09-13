@@ -480,6 +480,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     {
       for (int x = minGridPos.x; x <= maxGridPos.x; x++)
       {
+        // check if out of bounds
+        if (x < 0 || y < 0 || z < 0 || x > gridResolution || y > gridResolution || z > gridResolution)
+          continue;
+
         // For each cell, read the start/end indices in the boid pointer array.
         int neighborCellIndex = gridIndex3Dto1D(x, y, z, gridResolution);
         int startInx = gridCellStartIndices[neighborCellIndex];
@@ -593,8 +597,13 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
     {
       for (int x = minGridPos.x; x <= maxGridPos.x; x++)
       {
+        // check if out of bounds
+        if (x < 0 || y < 0 || z < 0 || x > gridResolution || y > gridResolution || z > gridResolution)
+          continue;
+
         // - For each cell, read the start/end indices in the boid pointer array.
         int neighborCellIndex = gridIndex3Dto1D(x, y, z, gridResolution);
+
         int startInx = gridCellStartIndices[neighborCellIndex];
         int endInx = gridCellEndIndices[neighborCellIndex];
         if (startInx != -1 && endInx != -1)
