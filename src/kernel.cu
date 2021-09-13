@@ -166,11 +166,11 @@ void Boids::initSimulation(int N) {
   kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects,
     dev_pos, scene_scale);
   checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
-  /*
+ 
   kernGenerateRandomVelArray << <fullBlocksPerGrid, blockSize >> > (2, numObjects,
     dev_vel1);
   checkCUDAErrorWithLine("kernGenerateRandomVelArray failed!");
-  */
+
   // LOOK-2.1 computing grid params
   gridCellWidth = 2.0f * std::max(std::max(rule1Distance, rule2Distance), rule3Distance);
   int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
