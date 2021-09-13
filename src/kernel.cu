@@ -169,6 +169,18 @@ void Boids::initSimulation(int N) {
   gridMinimum.z -= halfGridWidth;
 
   // TODO-2.1 TODO-2.3 - Allocate additional buffers here.
+  cudaMalloc((void**)&dev_particleArrayIndices, N * sizeof(int));
+  checkCUDAErrorWithLine("cudaMalloc dev_particleArrayIndices failed!");
+
+  cudaMalloc((void**)&dev_particleGridIndices, N * sizeof(int));
+  checkCUDAErrorWithLine("cudaMalloc dev_particleGridIndices failed!");
+
+  cudaMalloc((void**)&dev_gridCellStartIndices, gridCellCount * sizeof(int));
+  checkCUDAErrorWithLine("cudaMalloc dev_gridCellStartIndices failed!");
+
+  cudaMalloc((void**)&dev_gridCellEndIndices, gridCellCount * sizeof(int));
+  checkCUDAErrorWithLine("cudaMalloc dev_gridCellEndIndices failed!");
+
   cudaDeviceSynchronize();
 }
 
@@ -499,6 +511,9 @@ __global__ void kernUpdateVelNeighborSearchScattered(
         return;
     }
 
+    glm::vec3 finalVel, perceivedCenter, c, perceivedVel = glm::vec3(0.f);
+    int rule1Neighbors, rule3Neighbors = 0;
+
     glm::vec3 cellIdx3D = glm::floor((pos[index] - gridMin) * inverseCellWidth);
     int cellIndex = gridIndex3Dto1D(cellIdx3D, gridResolution);
 
@@ -509,11 +524,56 @@ __global__ void kernUpdateVelNeighborSearchScattered(
         if (cellIdx == -1) {
             continue;
         }
+        if (gridCellStartIndices[cellIdx] == -1) {
+            continue;
+        }
         for (int j = gridCellStartIndices[cellIdx]; j <= gridCellEndIndices[cellIdx]; j++) {
+            int boidIndex = particleArrayIndices[j];
+            if (boidIndex != index) {
+                glm::vec3 bPos = pos[boidIndex];
+                float dist = glm::distance(bPos, boidPos);
 
+                // rule1: cohesion
+                if (dist < rule1Distance) {
+                    rule1Neighbors++;
+                    perceivedCenter += bPos;
+                }
+
+                // separation
+                if (dist < rule2Distance) {
+                    c -= bPos - boidPos;
+                }
+
+                // alignment
+                if (dist < rule3Distance) {
+                    rule3Neighbors++;
+                    perceivedVel += vel1[boidIndex];
+                }
+            }
         }
     }
-    
+
+    if (rule1Neighbors != 0) {
+        perceivedCenter /= rule1Neighbors;
+        finalVel += (perceivedCenter - boidPos) * rule1Scale;
+    }
+
+    finalVel += c * rule2Scale;
+
+    // alignment
+    if (rule3Neighbors != 0) {
+        perceivedVel /= rule3Neighbors;
+        finalVel += perceivedVel * rule3Scale;
+    }
+
+    finalVel += vel1[index];
+
+    if (glm::length(finalVel) > maxSpeed) {
+        finalVel = glm::normalize(finalVel) * maxSpeed;
+    }
+
+    vel2[index] = finalVel;
+        
     
     
 
@@ -570,6 +630,9 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed
+    dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
+    kernComputeIndices << <fullBlocksPerGrid, blockSize >> > (numObjects, gridCellCount, gridMinimum,
+        gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleArrayIndices);
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
