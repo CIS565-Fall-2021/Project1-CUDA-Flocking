@@ -6,5 +6,16 @@ Project 1 - Flocking**
 * Tested on: Windows 10, AMD Ryzen 7 3700X @ 3.60GHz 32GB, RTX2070 SUPER 8GB (Personal)
 
 ### Screenshots
-Part 3.1.1: Modify the CUDA Project
-![Part 3.1.1](images/1.png)
+These screenshots are cpatured with 5e5 particles simulation.
+
+Part 1: Naive method (Brute force searching)
+![Part 1](images/1-500000.png)
+
+Part 2.1: Grid method (Grid searching)
+![Part 2.1](images/2-500000.png)
+
+Part 2.1: Coherent Grid method (Enhanced memory access)
+![Part 2.1](images/3-500000.png)
+
+### Performance Summary
+![chart](images/chart.png)
