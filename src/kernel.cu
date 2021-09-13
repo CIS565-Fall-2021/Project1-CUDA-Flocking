@@ -384,13 +384,6 @@ __global__ void kernResetIntBuffer(int N, int *intBuffer, int value) {
   }
 }
 
-__global__ void kernEnumerate(int N, thrust::device_ptr<int> intBuffer) {
-  int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-  if (index < N) {
-    intBuffer[index] = index;
-  }
-}
-
 __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
   int *gridCellStartIndices, int *gridCellEndIndices) {
   // TODO-2.1
@@ -773,20 +766,10 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
   										dev_thrust_shuffledArrayIndices1 + numObjects,
 											dev_pos);
-	thrust::copy(dev_thrust_shuffledArrayIndices2,
-  		dev_thrust_shuffledArrayIndices2 + numObjects,
-			dev_thrust_shuffledArrayIndices1);
-	thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
-  										dev_thrust_shuffledArrayIndices1 + numObjects,
+	thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
+  										dev_thrust_shuffledArrayIndices2 + numObjects,
 											dev_vel1);
 											
-  // determine unshuffle order. enumerate one index buffer then sort it by a copy of
-  // the original
-  kernEnumerate<<<numObjects, blockSize>>>(numObjects, dev_thrust_shuffledArrayIndices1);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
-  										dev_thrust_shuffledArrayIndices2 + numObjects,
-											dev_thrust_shuffledArrayIndices1);
-
 
   // - Perform velocity updates using neighbor search
   kernUpdateVelNeighborSearchCoherent<<<numObjects, blockSize>>>(numObjects,
@@ -801,16 +784,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 																																 dev_vel2);
   checkCUDAErrorWithLine("kernUpdateVelocityNeighborSearchCoherent failed!");
 	
-  thrust::copy(dev_thrust_shuffledArrayIndices1,
-  		dev_thrust_shuffledArrayIndices1 + numObjects,
-			dev_thrust_shuffledArrayIndices2);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices1,
-  										dev_thrust_shuffledArrayIndices1 + numObjects,
-											dev_pos);
-  thrust::sort_by_key(dev_thrust_shuffledArrayIndices2,
-  										dev_thrust_shuffledArrayIndices2 + numObjects,
-											dev_vel2);
-							
 
   cudaDeviceSynchronize();
   // - Update positions
