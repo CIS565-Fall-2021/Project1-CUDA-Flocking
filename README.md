@@ -79,3 +79,7 @@ In this implementation, the cell width of the uniform grid is hardcoded to be tw
 2. Uniform grid approach with 500000 boids
 
 Using the first setup, checking 27 cells with ```gridCellWidth = std::max(std::max(rule1Distance, rule2Distance), rule3Distance);``` didn't noticeably impact the performance with 50000 boids sparsely populating the space. Using the second setup with densely populated boids in the space, checking 27 cells provides better performance than checking only 8 cell.
+
+### TODO 
+
+Substitute gif with Youtube Link https://stackoverflow.com/questions/11804820/how-can-i-embed-a-youtube-video-on-github-wiki-pages 
