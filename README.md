@@ -15,11 +15,11 @@ Project 1 - Flocking**
 
 **Performance Analysis**
 
-![Figure1](images/withoutV.PNG)
+![Figure1](images/withoutV.png)
 
-![](images/withV.PNG)
+![](images/withV.png)
 
-![](images/blockSize.PNG)
+![](images/blockSize.png)
 
 From above plots, we can see:
 
