@@ -47,22 +47,31 @@ Project 1 - Flocking**
 
   * **Results**: FPS decreases as number of boids increases, but the rate of decreasing, compared to naive boids implementation, is much slower, which indicates much stronger performance compared to the naive boids method as we are only checking boids in neighboring cells instead of all the boids. The reason which the program still slows down after the number of boids reaches really big is that in `kernUpdateNeighborSearchScattered`, we are looping from the start index to the end index, this loop will gets bigger if the number of boids gets bigger. 
 
-* coherent uniform grid implementation
+  * Same as naive boids, visualization slows down the program with extra draw calls. 
+
+* **coherent uniform grid** implementation
 
   * with visualization
+  
+    ![coherent_numboids_vis](images/coherent_numboids_vis.png)
+  
   * simulation only
+  
+    ![coherent_numboids_novis](images/coherent_numboids_novis.png)
+  
+  * **Results: **FPS decreases as number of boids increases, comparing with scattered grid(showed in orange dots), coherent grid implementation has stronger performance when the number of boids gets larger. For small number of grids, coherent grid does not seem to have clear advantage. The reason is because in coherent method, we hold an extra buffer to store the reshuffled position and velocity to avoid indexing from the indices array each time. For small number of boids, this may not be a real big advantage, but for larger numbers, it has better performance.
 
 ##### Variant: Changing block size
 
-* naive boids implementation
-* scattered uniform grid implementation 
-* coherent uniform grid implementation
+* No visualization
+
+  ![blockSize_novis](images/blockSize_novis.png)
+
+  * For the naive implementation, the fps does varies with respect to the blockSize, but for uniform grid implementations, blockSize does not indicate a correlation with the performance. The performance about the best at around  64 - 256. Smaller block size results in smaller total number of threads and lower occupancy so we should avoid small block sizes. 
 
 ##### Variant: Changing width of each cell
 
-* For the coherent uniform grid: did you experience any performance improvements
-  with the more coherent uniform grid? Was this the outcome you expected?
-  Why or why not?
-* Did changing cell width and checking 27 vs 8 neighboring cells affect performance?
-  Why or why not? Be careful: it is insufficient (and possibly incorrect) to say
-  that 27-cell is slower simply because there are more cells to check!
+* Decreasing the cell width would slow down performance, as measured using the coherent grid approach with 50,000 boids, if we divide the cell width by 4, the fps goes down from around 1400fps to 1100 fps, and dividing by 8 results in only around 500 fps. 
+* This would be the usual case, but if the grid has very high density and very large cell width, which implies the cell count is small. Then it defeats the purpose of dividing the area using uniform grids, causing the performance to slow down just like the way we did in the naive implementation when we are checking too many neighbors. So we should decrease the cell width. 
+* **Result:** the cell width should be a carefully chosen value which has similar scale with the rule distances.
+
