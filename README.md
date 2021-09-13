@@ -47,10 +47,10 @@ FPS is utilized as the essential measurement of execution investigation. Edge ar
 
 Below Graphs Represent recoreded FPS with respect to the number of boids. Below data is averaged out over 10 seconds of execution.
 
-!(images/Graph_30000.PNG)
+![](images/Graph_30000.PNG)
 
 
-!(images/Graph_50000.PNG)
+![](images/Graph_50000.PNG)
 
 
 # Questions #
