@@ -28,6 +28,10 @@ Part 2.1: Coherent Grid method (Enhanced memory access)
 ![1000000](images/100000.gif)
 
 ### Performance Summary
+5 Methods' FPS with Increasing # of Boids
 ![chart](images/chart.png)
 
-
+1. For each implementation, increasing number of boid cause decrease in FPS. There are more particles to calculate also more traffic at the memory.
+2. Per my experiments, changing block size does not affect FPS. This is probably because large block size results more synchronized computation, which is not shown in this project.
+3. Changing to coherent uniform grid does improve the performance with 5e5 or more particles, but not improving with 1e5 or less particles. This is because the benefit of having aligned memory access can only become larger than the cost of sorted the list when the particles base is large enough.
+4. Changing grid width and using 27 neighoring cells actually increase the performance. This is more prominent in the grid method than in the coherent grid method. This is because having smaller checking range leads to fewer memory accesses, which is more important in the grid implementation than in coherent implementation.
