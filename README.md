@@ -7,7 +7,7 @@ Project 1 - Flocking**
 
 ### YouTube Demos
 These demos have 3 million boids. This code can run 5 million boids at 30+fps.
-[Demo 1](https://youtu.be/J59e8Gvm4Nk)
+[Demo 1](https://youtu.be/Kh1WCxn45gk)
 [Demo 2](https://youtu.be/M3_JNL-yDTA)
 [Demo 3](https://youtu.be/cQeCt1B_nHg)
 
