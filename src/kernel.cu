@@ -283,7 +283,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3* po
 		// Rule 2: Separation: boids try to stay a distance d away from each other
 		if (distance < rule2Distance)
 		{
-			seperation -= (pos[iSelf] - pos[i]);
+			seperation -= (pos[i] - pos[iSelf] );
 		}
 
 		// Rule 3: Alignment: boids try to match the velocities of neighboring boids
@@ -521,7 +521,7 @@ __device__ void computeVelocityChange2(int iSelf, int StartIndex, int EndIndex, 
 		// Rule 2: Separation: boids try to stay a distance d away from each other
 		if (distance < rule2Distance)
 		{
-			seperation -= (pos[iSelf] - pos[particleArrayIndices[i]]);
+			seperation -= ( pos[particleArrayIndices[i]] - pos[iSelf] );
 		}
 
 		// Rule 3: Alignment: boids try to match the velocities of neighboring boids
@@ -561,7 +561,7 @@ __device__ void computeVelocityChange3(int iSelf, int StartIndex, int EndIndex, 
 		// Rule 2: Separation: boids try to stay a distance d away from each other
 		if (distance < rule2Distance)
 		{
-			seperation -= (pos[iSelf] - pos[i]);
+			seperation -= (pos[i] - pos[iSelf] );
 		}
 
 		// Rule 3: Alignment: boids try to match the velocities of neighboring boids
