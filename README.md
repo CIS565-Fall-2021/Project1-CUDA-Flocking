@@ -1,8 +1,8 @@
 <h1 align="center">Flocking Simulation w/ CUDA</h1>
 
-```html
+```
 <p align="center">
-  <img src="images/boids-small-flocking-2.png" alt="boids-small-flocking screenshot" style="height: 250px; width:250px;"/>
+  <img width="250" height="250" src="images/boids-small-flocking-2.png">
 </p>
 ```
 
