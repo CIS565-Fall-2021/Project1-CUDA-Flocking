@@ -109,6 +109,8 @@ Coherent Implementation is similar to Scattered Implementation. However, the dat
 * Checking more cells in my implementation seemed to have negligible effects. While increasing the cells a boid must iterate through, other factors such as syncronization and stalling are also affected. 
 
 ## Failed Implementations
+In earlier implementations, I made an assumption that an instantiation of a variable would be automatically initialized to a default, known value. However, this was not the case. As a result numberous false positives were not caught in boolean checks. As a result, all boids observed all other boids in the entire space and accepted all position and velocity values, regardless of 'rule1Distance', 'rule2Distance', or 'rule3Distance'. 
+
 
 
 ## Notes
