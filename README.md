@@ -13,10 +13,12 @@ Several techniques were implemented in this research to simulate the movements o
 
 ## Simulation Images
 Simulation Begins: Early on in execution the boids are scattered randomly throughout the space
-![50000 Boids](images/50000_Naive.PNG)
+![500000 Boids](images/Boids1.PNG)
+![10000 Boids](images/3.PNG)
 
 Simulation Continues: Boids begin to travel in flocks with their neighbors forming groups
-![50000 Boids](images/50000_BoidFlockTogether.PNG)
+![500000 Boids](images/2.PNG)
+![100000 Boids](images/4.PNG)
 
 ## Simulation Videos : 50000 Boids
 Simulation Begins
@@ -69,3 +71,8 @@ can clearly see a decrease in performance.
 - With the coherent uniform grid Implementation the performance increases greatly. This behaviour can be attributed toward faster access time from the memory since the data is stored in contiguos memore locations and the intermediary step of memory redicrection was removed.
 - In our current Scenario decreasing the cell weidth resulted in an increase in performance. This can be attributed to decrease in the bouding volume of a grid cube. In the scenario where boids are more dispersed we end up checking lesser boids as compared to before but in a scenario where 
 boids areaccumulated closer to each other this behaviour may change. 
+
+
+# Update For Grading #
+I have deleted old Videos and added Gifs as Github can showcase them, also updated the images and changed a negative sign for one of the rules in my kernel.cu code. Please dont count this commit 
+towards late submission as i have already consulted Prof. Shehzan Mohammed regarding this. Thank you!
