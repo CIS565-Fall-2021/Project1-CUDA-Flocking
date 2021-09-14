@@ -27,57 +27,57 @@ This project does not implement any form of obstacles within the 3D space. Rule 
 ![ssa](images/a.PNG)
 
 20,000 boids GIF:
-![ga](images/a.GIF)
+![ga](images/a.gif)
 
 60,000 boids screenshot: 
 ![ssb](images/b.PNG)
 
 60,000 boids GIF:
-![gb](images/b.GIF)
+![gb](images/b.gif)
 
 120,000 boids screenshot: 
 ![ssc](images/c.PNG)
 
 120,000 boids GIF:
-![gc](images/c.GIF)
+![gc](images/c.gif)
 
 ### Scattered Grid Demo Gif
 20,000 boids screenshot: 
 ![ssd](images/d.PNG)
 
 20,000 boids GIF:
-![gd](images/d.GIF)
+![gd](images/d.gif)
 
 60,000 boids screenshot: 
 ![sse](images/e.PNG)
 
 60,000 boids GIF:
-![ge](images/e.GIF)
+![ge](images/e.gif)
 
 120,000 boids screenshot: 
 ![ssf](images/f.PNG)
 
 120,000 boids GIF:
-![gf](images/f.GIF)
+![gf](images/f.gif)
 
 ### Coherent Grid Demo Gif
 20,000 boids screenshot: 
 ![ssg](images/g.PNG)
 
 20,000 boids GIF:
-![gg](images/g.GIF)
+![gg](images/g.gif)
 
 60,000 boids screenshot: 
 ![ssh](images/h.PNG)
 
 60,000 boids GIF:
-![gh](images/h.GIF)
+![gh](images/h.gif)
 
 120,000 boids screenshot: 
 ![ssi](images/i.PNG)
 
 120,000 boids GIF:
-![gi](images/i.GIF)
+![gi](images/i.gif)
 
 ## Implementation 
 
