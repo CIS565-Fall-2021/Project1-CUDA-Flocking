@@ -1,6 +1,6 @@
 <h1 align="center">Flocking Simulation w/ CUDA</h1>
 
-<img src="images/boids-small-flocking-2.png" alt="boids-small-flocking screenshot" style="height: 250px; width:250px; align: center"/>
+<img src="images/boids-small-flocking-2.png" alt="boids-small-flocking screenshot" style="height: 250px; width:250px; display: block; margin-left: auto; margin-right: auto;"/>
 
 A flocking simulation based on the **Reynolds Flocking algorithm** that mimics the behavior exhibited when a group of birds, called a flock, are foraging or in flight.
 
