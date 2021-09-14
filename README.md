@@ -93,7 +93,6 @@ Coherent Implementation is similar to Scattered Implementation. However, the dat
 
 ## Analysis
 
-
 ### Data Comparison
 | Boids   | Naive FPS | Scattered FPS | Coherent FPS |
 |---------|-----------|---------------|--------------|
@@ -101,8 +100,7 @@ Coherent Implementation is similar to Scattered Implementation. However, the dat
 | 60,000  | 3.0       | 276.6         | 399.6        |
 | 120,000 | 0.8       | 124.4         | 198.0        |
 
-60,000 boids screenshot: 
-![ssaa](images/aa.PNG)
+![ssaa](images/aa.png)
 
 ### Questions
 * Framerate is inversely proportional to number of boids. As the number of boids increase, the framerate decreases. This is due to the increased density of boids. Since cells are fixed size, the average number of boids in each cell increases leading to more serialized calculations. 
