@@ -14,9 +14,9 @@ Project 1 - Flocking**
 
 ## Introduction
 The objective of this project was to mimic basic flocking behavior between boids. Boids are arbitrary representations of points in 3D space. Each boid follows three rules: 
-	* [Rule 1](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-1-boids-try-to-fly-towards-the-centre-of-mass-of-neighbouring-boids): Boids try to fly towards the centre of mass of neighbouring boids.
-	* [Rule 2](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-2-boids-try-to-keep-a-small-distance-away-from-other-objects-including-other-boids): Boids try to keep a small distance away from other objects (including other boids).
-	* [Rule 3](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-3-boids-try-to-match-velocity-with-near-boids): Rule 3: Boids try to match velocity with near boids.
+* [Rule 1](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-1-boids-try-to-fly-towards-the-centre-of-mass-of-neighbouring-boids): Boids try to fly towards the centre of mass of neighbouring boids.
+* [Rule 2](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-2-boids-try-to-keep-a-small-distance-away-from-other-objects-including-other-boids): Boids try to keep a small distance away from other objects (including other boids).
+* [Rule 3](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-3-boids-try-to-match-velocity-with-near-boids): Rule 3: Boids try to match velocity with near boids.
 
 This project does not implement any form of obstacles within the 3D space. Rule 2 only accounts for neighboring boids. This project is intended as an introduction to CUDA programming and data accessing and handling within GPU memory space. 
 
@@ -83,7 +83,7 @@ This project does not implement any form of obstacles within the 3D space. Rule 
 
 
 ### Naive Implementation
-Naive Implementation took a simplistic approach to calculating each rule. To compute the rules, each individual boid would observe every other boid in the 3D space and return a comulative velocity. A boid\'s position and velocity would be factored into the comulative velocity if it fulfilled the distance conditions: 'rule1Distance', 'rule2Distance', and 'rule3Distance'.
+Naive Implementation took a simplistic approach to calculating each rule. To compute the rules, each individual boid would observe every other boid in the 3D space and return a comulative velocity. The position and velocity of a boid would be factored into the comulative velocity if it fulfilled the distance conditions: 'rule1Distance', 'rule2Distance', and 'rule3Distance'.
 
 ### Scattered Grid Implementation
 Scattered Implementation used a grid data structure that represented smaller spaces (cells) within the 3D space. This data structure utilized: 'dev_particleArrayIndices', 'dev_particleGridIndices', 'dev_gridCellStartIndices', and 'dev_gridCellEndIndices'. These structures allowed the dereferencing of boid position and velocity vectors based on their 3D space. Each individual boid observes the position and velocity vectors of every other boid within a 2x2 cube of cells (lengths defined by 'gridCellWidth') and, given they satisfy 'rule1Distance', 'rule2Distance', and 'rule3Distance', are incorporated into a cumulative velocity and returned. 
@@ -107,11 +107,6 @@ Coherent Implementation is similar to Scattered Implementation. However, the dat
 * Decreasing the block count negatively affected performance. As we decrease number of blocks, number of warps increased. Blocks can be parallelized by warps within an SM is serialized. 
 * The coherent grid structure increased performance. The purpose of this step was to parallelize two memory dereferences rather than performing them in serial (like in scattered grid implementation).
 * Checking more cells in my implementation seemed to have negligible effects. While increasing the cells a boid must iterate through, other factors such as syncronization and stalling are also affected. 
-
-## Failed Implementations
-In earlier implementations, I made an assumption that an instantiation of a variable would be automatically initialized to a default, known value. However, this was not the case. As a result numberous false positives were not caught in boolean checks. As a result, all boids observed all other boids in the entire space and accepted all position and velocity values, regardless of 'rule1Distance', 'rule2Distance', or 'rule3Distance'. 
-
-
 
 ## Notes
 * One late day used. 
