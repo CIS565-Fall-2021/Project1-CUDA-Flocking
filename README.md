@@ -16,7 +16,7 @@ Project 1 - Flocking**
 The objective of this project was to mimic basic flocking behavior between boids. Boids are arbitrary representations of points in 3D space. Each boid follows three rules: 
 * [Rule 1](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-1-boids-try-to-fly-towards-the-centre-of-mass-of-neighbouring-boids): Boids try to fly towards the centre of mass of neighbouring boids.
 * [Rule 2](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-2-boids-try-to-keep-a-small-distance-away-from-other-objects-including-other-boids): Boids try to keep a small distance away from other objects (including other boids).
-* [Rule 3](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-3-boids-try-to-match-velocity-with-near-boids): Rule 3: Boids try to match velocity with near boids.
+* [Rule 3](https://github.com/CIS565-Fall-2021/Project1-CUDA-Flocking/blob/main/INSTRUCTION.md#rule-3-boids-try-to-match-velocity-with-near-boids): Boids try to match velocity with near boids.
 
 This project does not implement any form of obstacles within the 3D space. Rule 2 only accounts for neighboring boids. This project is intended as an introduction to CUDA programming and data accessing and handling within GPU memory space. 
 
@@ -83,10 +83,10 @@ This project does not implement any form of obstacles within the 3D space. Rule 
 
 
 ### Naive Implementation
-Naive Implementation took a simplistic approach to calculating each rule. To compute the rules, each individual boid would observe every other boid in the 3D space and return a comulative velocity. The position and velocity of a boid would be factored into the comulative velocity if it fulfilled the distance conditions: 'rule1Distance', 'rule2Distance', and 'rule3Distance'.
+Naive Implementation took a simplistic approach to calculating each rule. To compute the rules, each individual boid would observe every other boid in the 3D space and return a comulative velocity. The position and velocity of a boid would be factored into the comulative velocity if it fulfilled the distance conditions: `rule1Distance`, `rule2Distance`, and `rule3Distance`.
 
 ### Scattered Grid Implementation
-Scattered Implementation used a grid data structure that represented smaller spaces (cells) within the 3D space. This data structure utilized: 'dev_particleArrayIndices', 'dev_particleGridIndices', 'dev_gridCellStartIndices', and 'dev_gridCellEndIndices'. These structures allowed the dereferencing of boid position and velocity vectors based on their 3D space. Each individual boid observes the position and velocity vectors of every other boid within a 2x2 cube of cells (lengths defined by 'gridCellWidth') and, given they satisfy 'rule1Distance', 'rule2Distance', and 'rule3Distance', are incorporated into a cumulative velocity and returned. 
+Scattered Implementation used a grid data structure that represented smaller spaces (cells) within the 3D space. This data structure utilized: `dev_particleArrayIndices`, `dev_particleGridIndices`, `dev_gridCellStartIndices`, and `dev_gridCellEndIndices`. These structures allowed the dereferencing of boid position and velocity vectors based on their 3D space. Each individual boid observes the position and velocity vectors of every other boid within a 2x2 cube of cells (lengths defined by `gridCellWidth`) and, given they satisfy `rule1Distance`, `rule2Distance`, and `rule3Distance`, are incorporated into a cumulative velocity and returned. 
 
 ### Coherent Grid Implementation
 Coherent Implementation is similar to Scattered Implementation. However, the data structures are altered such that we parallelize memory dereferences to improve performance. 
