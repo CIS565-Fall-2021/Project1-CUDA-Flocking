@@ -7,6 +7,7 @@
 */
 
 #include "main.hpp"
+#include <iomanip>
 
 // ================
 // Configuration
@@ -16,10 +17,17 @@
 #define VISUALIZE 1
 #define UNIFORM_GRID 0
 #define COHERENT_GRID 0
+#define TIMING_ANALYSIS 1
+#define UNIT_TEST 1
+
+#define FIXED_FLOAT(x) std::fixed <<std::setprecision(2)<<(x) 
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 5000;
+const int N_FOR_VIS = 50000; // max it out at 3,000,000
 const float DT = 0.2f;
+
+static long numberOfSteps = 0;
+static float timePassed = 0.f;
 
 /**
 * C main function.
@@ -195,6 +203,14 @@ void initShaders(GLuint * program) {
     cudaGLMapBufferObject((void**)&dptrVertPositions, boidVBO_positions);
     cudaGLMapBufferObject((void**)&dptrVertVelocities, boidVBO_velocities);
 
+    #if TIMING_ANALYSIS
+    // timing analysis
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+    #endif
     // execute the kernel
     #if UNIFORM_GRID && COHERENT_GRID
     Boids::stepSimulationCoherentGrid(DT);
@@ -203,7 +219,24 @@ void initShaders(GLuint * program) {
     #else
     Boids::stepSimulationNaive(DT);
     #endif
+    #if TIMING_ANALYSIS
+    cudaEventRecord(stop);
 
+    cudaEventSynchronize(stop);
+    float milliseconds = 0.f;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+
+    timePassed += milliseconds;
+    numberOfSteps++;
+
+    if (timePassed > 10000)
+    {
+      std::cout << "\nAverage time step: " << FIXED_FLOAT(timePassed / numberOfSteps) << "(ms)" << std::endl;
+      std::cout << "Average frame per second: " << FIXED_FLOAT(1000 * numberOfSteps / timePassed) << "(fps)" << std::endl;
+      timePassed = 0.f;
+      numberOfSteps = 0;
+    }
+    #endif
     #if VISUALIZE
     Boids::copyBoidsToVBO(dptrVertPositions, dptrVertVelocities);
     #endif
@@ -217,8 +250,10 @@ void initShaders(GLuint * program) {
     double timebase = 0;
     int frame = 0;
 
+    #if UNIT_TEST
     Boids::unitTest(); // LOOK-1.2 We run some basic example code to make sure
                        // your CUDA development setup is ready to go.
+    #endif
 
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
