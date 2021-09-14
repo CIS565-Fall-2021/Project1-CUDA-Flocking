@@ -718,16 +718,15 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 
     kernComputeIndices<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
     thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
-    kernRearrange << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_newPos, dev_pos, dev_particleArrayIndices);
-    kernRearrange << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_vel2, dev_vel1, dev_particleArrayIndices);
+    kernRearrange<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_newPos, dev_pos, dev_particleArrayIndices);
+    kernRearrange<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_vel2, dev_vel1, dev_particleArrayIndices);
     cudaDeviceSynchronize(); 
 
-    kernIdentifyCellStartEnd << <fullBlocksPerGrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
-
-    kernUpdateVelNeighborSearchCoherent << <fullBlocksPerGrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_newPos, dev_vel2, dev_vel1);
+    kernIdentifyCellStartEnd<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+    kernUpdateVelNeighborSearchCoherent<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_newPos, dev_vel2, dev_vel1);
     cudaDeviceSynchronize();
-    kernUpdatePos<<<fullBlocksPerGrid, blockSize >> > (numObjects, dt, dev_newPos, dev_vel1);
 
+    kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_newPos, dev_vel1);
     std::swap(dev_newPos, dev_pos);
 
 }
@@ -744,6 +743,7 @@ void Boids::endSimulation() {
     cudaFree(dev_gridCellEndIndices);
 
     // TODO-2.3 - Free any additional buffers here.
+    cudaFree(dev_newPos);
 }
 
 void Boids::unitTest() {
