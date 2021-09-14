@@ -29,10 +29,12 @@ algorithm improves program run time.
 
 ![Blocksize](images/Blocksize.png)
 
-This graph above is obtained by keeping boid count constant at 10000 and varying block size. The graph shows that 
-increasing block size does not seem to affect FPS for any configuration. This is reasonable because changing the block size does not
-reduce or increase the total amount of computation required for the boid simulation. The only difference is how the threads are scheduled
-to execute on the GPU.
+This graph above is obtained by keeping boid count constant at 10000 and varying block size. The maximum block size is 1024, which is
+set by the GPU. The graph shows that increasing block size does not seem to affect FPS significantly for the naive method and the coherent uniform grid method. 
+This is reasonable because changing the block size does not reduce or increase the total amount of computation required for the boid simulation. 
+The only difference is how the threads are scheduled to execute on the GPU. For the scattered uniform grid method, the FPS
+peaks at blocksize of 32 and 1024. I don't have a good explanation execept that the combination of boid count and block size enables
+the program to fully saturate the computational resource of the GPU.
 
 The program experenced significant performance improvement when I changed from scattered uniform grid to coherent uniform grid.
 I did not expect this at first since coherent uniform grid involves an extra shuffling step for the velocity and position buffer.
