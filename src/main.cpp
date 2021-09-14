@@ -18,7 +18,7 @@
 #define COHERENT_GRID 0
 
 // LOOK-1.2 - change this to adjust particle count in the simulation
-const int N_FOR_VIS = 5000;
+const int N_FOR_VIS = 100000;
 const float DT = 0.2f;
 
 /**
@@ -64,7 +64,7 @@ bool init(int argc, char **argv) {
   int minor = deviceProp.minor;
 
   std::ostringstream ss;
-  ss << projectName << " [SM " << major << "." << minor << " " << deviceProp.name << "]";
+  ss << projectName << " Wayne Wu: [SM " << major << "." << minor << " " << deviceProp.name << "]";
   deviceName = ss.str();
 
   // Window setup stuff
