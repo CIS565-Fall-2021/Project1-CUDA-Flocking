@@ -36,7 +36,7 @@ As seen from the graphs, framerate declines as the number of boids increases. In
 
 ![graph3](/images/graph3.png)
 
-Changing the block size and the number of blocks doesn't affect framerate, since it mainly affects how threads are distributed to SMs and not much else.
+When the block size is really small like when it's 32 in the graph, there's a slight performance drop likely due to the fact that the number of threads in a block is too small to hide stalling caused by memory accesses.
 
 ### Performance Gain from Coherent Uniform Grid
 
