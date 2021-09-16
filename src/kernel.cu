@@ -237,48 +237,54 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities)
 */
 __device__ glm::vec3 compute_velocity_change(int N, int self, const glm::vec3 *pos, const glm::vec3 *vel)
 {
+	glm::vec3 v = vel[self];
+	glm::vec3 p = pos[self];
+
 	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
 	// Rule 2: boids try to stay a distance d away from each other
 	// Rule 3: boids try to match the speed of surrounding boids
-	glm::vec3 v = vel[self];
 
-	glm::vec3 perceived_center = glm::vec3(0.0f, 0.0f, 0.0f); // rule 1
-	glm::vec3 c = glm::vec3(0.0f, 0.0f, 0.0f); // rule 2
-	glm::vec3 perceived_vel = glm::vec3(0.0f, 0.0f, 0.0f); // rule 3
-	int neighbour_count_pos = 0;
-	int neighbour_count_vel = 0;
+	glm::vec3 perceived_center(0.0f);
+	glm::vec3 perceived_vel(0.0f);
+	int neighbour_count_p = 0, neighbour_count_v = 0;
+	glm::vec3 c(0.0f);
 
 	for (int i = 0; i < N; i++) {
-		glm::vec3 p = pos[i];
-		glm::vec3 diff = p - pos[self];
-		float len = diff.length();
+		glm::vec3 b_pos = pos[i];
+		float len = glm::distance(b_pos, p);
 
-		if (len < rule1Distance) {
-			perceived_center += p;
-			neighbour_count_pos++;
+		if (len < rule1Distance)  {
+			perceived_center += b_pos;
+			neighbour_count_p++;
 		}
-		if (len < rule2Distance)
-			c -= diff;
+
+		if (len < rule2Distance)  {
+			c -= (b_pos - p);
+		}
+
 		if (len < rule3Distance) {
 			perceived_vel += vel[i];
-			neighbour_count_vel++;
+			neighbour_count_v++;
 		}
 	}
 
-	perceived_center -= pos[self];
-	perceived_vel -= vel[self];
+	perceived_center -= p;
+	perceived_vel -= v;
+	neighbour_count_p--;
+	neighbour_count_v--;
 
-	if (neighbour_count_pos > 0) {
-		perceived_center /= neighbour_count_pos;
-		v += (perceived_center - pos[self]) * rule1Scale;
+	if (neighbour_count_p > 0) {
+		perceived_center /= neighbour_count_p;
 	}
-	if (neighbour_count_vel > 0) {
-		perceived_vel /= neighbour_count_vel;
-		v += perceived_vel * rule3Scale;
+	if (neighbour_count_v > 0) {
+		perceived_vel /= neighbour_count_v;
 	}
 
-	
-	return v + c * rule2Scale;
+	v += (perceived_center - p) * rule1Scale;
+	v += c * rule2Scale;
+	v += perceived_vel * rule3Scale;
+
+	return v;
 }
 
 /**
@@ -293,8 +299,8 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos, glm::vec3 *v
 
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 	glm::vec3 v = compute_velocity_change(N, index, pos, vel1);
-	if (v.length() > maxSpeed)
-		v = v * (1.0f / v.length());
+	if (glm::length(v) > maxSpeed)
+		v = v * (maxSpeed / glm::length(v));
 	vel2[index] = v;
 
 }
