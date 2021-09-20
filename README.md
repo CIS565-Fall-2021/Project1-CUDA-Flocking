@@ -1,15 +1,12 @@
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture,
-Project 1 - Flocking**
-
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture,
-Project 1 - Boids**
+Project 1 -  Flocking**
 
 * Nuofan Xu
 * Tested on: Windows 10, AMD Ryzen 3800x @ 3.9Hz, RTX 2080 Super 16GB
 
 ### Overview
 
-[![](images/results/boids.gif)](https://vimeo.com/233558094)
+[![](/images/boids.gif)](https://vimeo.com/233558094)
 
 ###### (Run on RTX 2080 Super with 10000 boids, recorded as GIF at low fps due to file size limitations of github)
 
@@ -45,9 +42,9 @@ Pointers to boid data are contiguous in memory, but the boid data they point to 
 
 Tests were done using a block size of 128 on all three implementations with visualization window on. Verticle sync feature is turned off to avoid capping FPS at 60.
 
-![](images/vis_on.png)
+![](images/vis_on.PNG)
 
-![](images/vis_on_plt.png)
+![](images/vis_on_plt.PNG)
 
 Tests were also done using a block size of 128 on all three implementations with visualization window off.
 
