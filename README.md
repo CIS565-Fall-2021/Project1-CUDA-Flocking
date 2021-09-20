@@ -44,13 +44,14 @@ Tests were done using a block size of 128 on all three implementations with visu
 
 ![](images/vis_on.PNG)
 
-![](images/vis_on_plt.PNG)
+<!-- ![](images/vis_on_plt.PNG) -->
+<img src="images/vis_on_plt.PNG" width="60%" height="60%">
 
 Tests were also done using a block size of 128 on all three implementations with visualization window off.
 
-![](images/vis_off.png)
+![](images/vis_off.PNG)
 
-![](images/vis_off_plt.png)
+![](images/vis_off_plt.PNG)
 
 ##### The Naive implementation stops working for >= 480,000 Boids as the CUDA kernels refused to launch with such high boid counts.
 
@@ -60,9 +61,9 @@ As would be expected, as the number of boids increases, all three implementation
 
 Tests were done using 5000 boids on all three implementations with visualization window off.
 
-![](images/block_size.png)
+![](images/block_size.PNG)
 
-![](images/block_size_plt.png)
+![](images/block_size_plt.PNG)
 
 
 From the graph we can see that block size barely affects Uniform Coherent Grid implementation. Generally speaking, the increase of block size decreases the performance of Boid simulation. This might be because smaller blocks mean a larger number of blocks. With increasing number of warps in its own block, we gradually lose the performance benefits of shared memory within a block and instead need to allocate memory for each of our very many blocks.
@@ -71,13 +72,13 @@ The blocksize doesn't affect Uniform Scattered and Uniform Coherent Grid impleme
 
 #### Effect of changing search radius (26/8 neighboring cells) and grid cell size
 
-![](images/neighboring.png)
+![](images/neighboring.PNG)
 
 As can be seen in the table above, an increase in the number of neighboring grid cells we check results in a lower framerate, same as an increase in cell width. The former is easy to understand - the more boids we have to check against the current boid, the more calculation and memory accesses that need to be done. The latter is because that more boids will likely be covered in those bigger cells. By cutting cell width to half and checking 26 neighboring cells, we essentially just increase the overhead for maintaining the grid without a significant reduction in the number of boids we check. It is possible to achieve a better framerate by increasing 'cell width' and decreasing 'the number of neighboring grid cells that have to be checked', although it is achieved mainly by reducing the number of boids to check (less memory accesses and calcualtions).
 
 #### Drastic fall in framerate
 
-![](images/results/NumberofBoidsVSframerate_LineChart_Weirdness.png)
+![](images/results/NumberofBoidsVSframerate_LineChart_Weirdness.PNG)
 
 If we zoom into to the first few data points, we can notice a sudden jump that almost doubles our framerate while increasing the number of boids. At first glance, this seems kind of absurd, but it is more likely that in some situations, the number of boids do not map well into the memory of the underlying architecture which leads to a frustrating reduction in framerate.
 
