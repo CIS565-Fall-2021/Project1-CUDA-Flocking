@@ -2,7 +2,7 @@
 Project 1 -  Flocking**
 
 * Nuofan Xu
-* Tested on: Windows 10, AMD Ryzen 3800x @ 3.9Hz, RTX 2080 Super 16GB
+* Tested on: Windows 10, AMD Ryzen 3800x @ 3.9Hz 2x16GB RAM, RTX 2080 Super 8GB
 
 ### Overview
 
