@@ -58,6 +58,8 @@ glm::mat4 projection;
 //====================================
 
 const char *projectName;
+char* mode;
+char* projName;
 
 int main(int argc, char* argv[]);
 
