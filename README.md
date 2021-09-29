@@ -2,7 +2,7 @@
 Project 1 - Flocking**
 
 * Yuxuan Zhu
-  * [LinkedIn](https://www.linkedin.com/in/andrewyxzhu/), [personal website]()
+  * [LinkedIn](https://www.linkedin.com/in/andrewyxzhu/)
 * Tested on: Windows 10, i7-7700HQ @ 2.80GHz 16GB, GTX 1050 4096MB (Personal Laptop)
 
 **Demo**
