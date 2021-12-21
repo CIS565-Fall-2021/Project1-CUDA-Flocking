@@ -179,134 +179,134 @@ void initShaders(GLuint * program) {
 		}
 	}
 
-	//====================================
-	// Main loop
-	//====================================
-	void runCUDA() {
-		// Map OpenGL buffer object for writing from CUDA on a single GPU
-		// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not
-		// use this buffer
+//====================================
+// Main loop
+//====================================
+void runCUDA() {
+	// Map OpenGL buffer object for writing from CUDA on a single GPU
+	// No data is moved (Win & Linux). When mapped to CUDA, OpenGL should not
+	// use this buffer
 
-		float4 *dptr = NULL;
-		float *dptrVertPositions = NULL;
-		float *dptrVertVelocities = NULL;
+	float4 *dptr = NULL;
+	float *dptrVertPositions = NULL;
+	float *dptrVertVelocities = NULL;
 
-		cudaGLMapBufferObject((void**)&dptrVertPositions, boidVBO_positions);
-		cudaGLMapBufferObject((void**)&dptrVertVelocities, boidVBO_velocities);
+	cudaGLMapBufferObject((void**)&dptrVertPositions, boidVBO_positions);
+	cudaGLMapBufferObject((void**)&dptrVertVelocities, boidVBO_velocities);
 
-		// execute the kernel
-		#if UNIFORM_GRID && COHERENT_GRID
-		Boids::stepSimulationCoherentGrid(DT);
-		#elif UNIFORM_GRID
-		Boids::stepSimulationScatteredGrid(DT);
-		#else
-		Boids::stepSimulationNaive(DT);
-		#endif
+	// execute the kernel
+	#if UNIFORM_GRID && COHERENT_GRID
+	Boids::stepSimulationCoherentGrid(DT);
+	#elif UNIFORM_GRID
+	Boids::stepSimulationScatteredGrid(DT);
+	#else
+	Boids::stepSimulationNaive(DT);
+	#endif
+
+	#if VISUALIZE
+	Boids::copyBoidsToVBO(dptrVertPositions, dptrVertVelocities);
+	#endif
+	// unmap buffer object
+	cudaGLUnmapBufferObject(boidVBO_positions);
+	cudaGLUnmapBufferObject(boidVBO_velocities);
+}
+
+void mainLoop() {
+	double fps = 0;
+	double timebase = 0;
+	int frame = 0;
+
+	Boids::unitTest(); // LOOK-1.2 We run some basic example code to make sure
+			   // your CUDA development setup is ready to go.
+
+	while (!glfwWindowShouldClose(window)) {
+		glfwPollEvents();
+
+		frame++;
+		double time = glfwGetTime();
+
+		if (time - timebase > 1.0) {
+			fps = frame / (time - timebase);
+			timebase = time;
+			frame = 0;
+		}
+
+		runCUDA();
+
+		std::ostringstream ss;
+		ss << "[";
+		ss.precision(1);
+		ss << std::fixed << fps;
+		ss << " fps] " << deviceName;
+		glfwSetWindowTitle(window, ss.str().c_str());
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		#if VISUALIZE
-		Boids::copyBoidsToVBO(dptrVertPositions, dptrVertVelocities);
-		#endif
-		// unmap buffer object
-		cudaGLUnmapBufferObject(boidVBO_positions);
-		cudaGLUnmapBufferObject(boidVBO_velocities);
-	}
-
-	void mainLoop() {
-		double fps = 0;
-		double timebase = 0;
-		int frame = 0;
-
-		Boids::unitTest(); // LOOK-1.2 We run some basic example code to make sure
-				               // your CUDA development setup is ready to go.
-
-		while (!glfwWindowShouldClose(window)) {
-			glfwPollEvents();
-
-			frame++;
-			double time = glfwGetTime();
-
-			if (time - timebase > 1.0) {
-				fps = frame / (time - timebase);
-				timebase = time;
-				frame = 0;
-			}
-
-			runCUDA();
-
-			std::ostringstream ss;
-			ss << "[";
-			ss.precision(1);
-			ss << std::fixed << fps;
-			ss << " fps] " << deviceName;
-			glfwSetWindowTitle(window, ss.str().c_str());
-
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			#if VISUALIZE
-			glUseProgram(program[PROG_BOID]);
-			glBindVertexArray(boidVAO);
-			glPointSize((GLfloat)pointSize);
-			glDrawElements(GL_POINTS, N_FOR_VIS + 1, GL_UNSIGNED_INT, 0);
-			glPointSize(1.0f);
-
-			glUseProgram(0);
-			glBindVertexArray(0);
-
-			glfwSwapBuffers(window);
-			#endif
-		}
-		glfwDestroyWindow(window);
-		glfwTerminate();
-	}
-
-
-	void errorCallback(int error, const char *description) {
-		fprintf(stderr, "error %d: %s\n", error, description);
-	}
-
-	void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-		if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-			glfwSetWindowShouldClose(window, GL_TRUE);
-		}
-	}
-
-	void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-		leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
-		rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
-	}
-
-	void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
-		if (leftMousePressed) {
-			// compute new camera parameters
-			phi += (xpos - lastX) / width;
-			theta -= (ypos - lastY) / height;
-			theta = std::fmax(0.01f, std::fmin(theta, 3.14f));
-			updateCamera();
-		}
-		else if (rightMousePressed) {
-			zoom += (ypos - lastY) / height;
-			zoom = std::fmax(0.1f, std::fmin(zoom, 5.0f));
-			updateCamera();
-		}
-
-	lastX = xpos;
-	lastY = ypos;
-	}
-
-	void updateCamera() {
-		cameraPosition.x = zoom * sin(phi) * sin(theta);
-		cameraPosition.z = zoom * cos(theta);
-		cameraPosition.y = zoom * cos(phi) * sin(theta);
-		cameraPosition += lookAt;
-
-		projection = glm::perspective(fovy, float(width) / float(height), zNear, zFar);
-		glm::mat4 view = glm::lookAt(cameraPosition, lookAt, glm::vec3(0, 0, 1));
-		projection = projection * view;
-
-		GLint location;
-
 		glUseProgram(program[PROG_BOID]);
-		if ((location = glGetUniformLocation(program[PROG_BOID], "u_projMatrix")) != -1) {
-			glUniformMatrix4fv(location, 1, GL_FALSE, &projection[0][0]);
-		}
+		glBindVertexArray(boidVAO);
+		glPointSize((GLfloat)pointSize);
+		glDrawElements(GL_POINTS, N_FOR_VIS + 1, GL_UNSIGNED_INT, 0);
+		glPointSize(1.0f);
+
+		glUseProgram(0);
+		glBindVertexArray(0);
+
+		glfwSwapBuffers(window);
+		#endif
 	}
+	glfwDestroyWindow(window);
+	glfwTerminate();
+}
+
+
+void errorCallback(int error, const char *description) {
+	fprintf(stderr, "error %d: %s\n", error, description);
+}
+
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+		glfwSetWindowShouldClose(window, GL_TRUE);
+	}
+}
+
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
+	rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
+}
+
+void mousePositionCallback(GLFWwindow* window, double xpos, double ypos) {
+	if (leftMousePressed) {
+		// compute new camera parameters
+		phi += (xpos - lastX) / width;
+		theta -= (ypos - lastY) / height;
+		theta = std::fmax(0.01f, std::fmin(theta, 3.14f));
+		updateCamera();
+	}
+	else if (rightMousePressed) {
+		zoom += (ypos - lastY) / height;
+		zoom = std::fmax(0.1f, std::fmin(zoom, 5.0f));
+		updateCamera();
+	}
+
+lastX = xpos;
+lastY = ypos;
+}
+
+void updateCamera() {
+	cameraPosition.x = zoom * sin(phi) * sin(theta);
+	cameraPosition.z = zoom * cos(theta);
+	cameraPosition.y = zoom * cos(phi) * sin(theta);
+	cameraPosition += lookAt;
+
+	projection = glm::perspective(fovy, float(width) / float(height), zNear, zFar);
+	glm::mat4 view = glm::lookAt(cameraPosition, lookAt, glm::vec3(0, 0, 1));
+	projection = projection * view;
+
+	GLint location;
+
+	glUseProgram(program[PROG_BOID]);
+	if ((location = glGetUniformLocation(program[PROG_BOID], "u_projMatrix")) != -1) {
+		glUniformMatrix4fv(location, 1, GL_FALSE, &projection[0][0]);
+	}
+}

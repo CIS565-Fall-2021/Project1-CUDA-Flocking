@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "utilityCore.hpp"
 #include "kernel.h"
+#include "cVec.h"
 
 // LOOK-2.1 potentially useful for doing grid-based neighbor search
 #ifndef MAX
@@ -17,9 +18,7 @@
 
 #define checkCUDAErrorWithLine(msg) checkCUDAError(msg, __LINE__)
 
-/**
-* Check for CUDA errors; print and exit if there was a problem.
-*/
+/* Check for CUDA errors; print and exit if there was a problem */
 void checkCUDAError(const char *msg, int line = -1)
 {
 	cudaError_t err = cudaGetLastError();
@@ -62,14 +61,17 @@ void checkCUDAError(const char *msg, int line = -1)
 int numObjects;
 dim3 threadsPerBlock(blockSize);
 
+
+using glm::vec3;
+
 // LOOK-1.2 - These buffers are here to hold all your boid information.
 // These get allocated for you in Boids::initSimulation.
 // Consider why you would need two velocity buffers in a simulation where each
 // boid cares about its neighbors' velocities.
 // These are called ping-pong buffers.
-glm::vec3 *dev_pos;
-glm::vec3 *dev_vel1;
-glm::vec3 *dev_vel2;
+cu::cPtr<vec3> dev_pos;
+cu::cPtr<vec3> dev_vel1;
+cu::cPtr<vec3> dev_vel2;
 
 // LOOK-2.1 - these are NOT allocated for you. You'll have to set up the thrust
 // pointers on your own too.
@@ -93,7 +95,7 @@ int gridCellCount;
 int gridSideCount;
 float gridCellWidth;
 float gridInverseCellWidth;
-glm::vec3 gridMinimum;
+vec3 gridMinimum;
 
 /******************
 * initSimulation *
@@ -114,12 +116,12 @@ __host__ __device__ unsigned int hash(unsigned int a)
 * LOOK-1.2 - this is a typical helper function for a CUDA kernel.
 * Function for generating a random vec3.
 */
-__host__ __device__ glm::vec3 generateRandomVec3(float time, int index)
+__host__ __device__ vec3 generateRandomVec3(float time, int index)
 {
 	thrust::default_random_engine rng(hash((int)(index * time)));
 	thrust::uniform_real_distribution<float> unitDistrib(-1, 1);
 
-	return glm::vec3((float)unitDistrib(rng), (float)unitDistrib(rng), (float)unitDistrib(rng));
+	return vec3((float)unitDistrib(rng), (float)unitDistrib(rng), (float)unitDistrib(rng));
 }
 
 
@@ -127,11 +129,11 @@ __host__ __device__ glm::vec3 generateRandomVec3(float time, int index)
 * LOOK-1.2 - This is a basic CUDA kernel.
 * CUDA kernel for generating boids with a specified mass randomly around the star.
 */
-__global__ void kernGenerateRandomPosArray(int time, int N, glm::vec3 *arr, float scale)
+__global__ void kernGenerateRandomPosArray(int time, int N, vec3 *arr, float scale)
 {
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (index < N) {
-		glm::vec3 rand = generateRandomVec3(time, index);
+		vec3 rand = generateRandomVec3(time, index);
 		arr[index] = scale * rand;
 	}
 }
@@ -145,18 +147,12 @@ void Boids::initSimulation(int N)
 	dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
 
 	// LOOK-1.2 - This is basic CUDA memory management and error checking.
-	// Don't forget to cudaFree in  Boids::endSimulation.
-	cudaMalloc((void**)&dev_pos, N * sizeof(glm::vec3));
-	checkCUDAErrorWithLine("cudaMalloc dev_pos failed!");
-
-	cudaMalloc((void**)&dev_vel1, N * sizeof(glm::vec3));
-	checkCUDAErrorWithLine("cudaMalloc dev_vel1 failed!");
-
-	cudaMalloc((void**)&dev_vel2, N * sizeof(glm::vec3));
-	checkCUDAErrorWithLine("cudaMalloc dev_vel2 failed!");
+	dev_pos = cu::make<vec3>(N);
+	dev_vel1 = cu::make<vec3>(N);
+	dev_vel2 = cu::make<vec3>(N);
 
 	// LOOK-1.2 - This is a typical CUDA kernel invocation.
-	kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects, dev_pos, scene_scale);
+	kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects, dev_pos.raw_ptr(), scene_scale);
 	checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
 	// LOOK-2.1 computing grid params
@@ -180,10 +176,8 @@ void Boids::initSimulation(int N)
 * copyBoidsToVBO *
 ******************/
 
-/**
-* Copy the boid positions into the VBO so that they can be drawn by OpenGL.
-*/
-__global__ void kernCopyPositionsToVBO(int N, glm::vec3 *pos, float *vbo, float s_scale)
+/* Copy the boid positions into the VBO so that they can be drawn by OpenGL */
+__global__ void kernCopyPositionsToVBO(int N, vec3 *pos, float *vbo, float s_scale)
 {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 
@@ -197,7 +191,7 @@ __global__ void kernCopyPositionsToVBO(int N, glm::vec3 *pos, float *vbo, float 
 	}
 }
 
-__global__ void kernCopyVelocitiesToVBO(int N, glm::vec3 *vel, float *vbo, float s_scale)
+__global__ void kernCopyVelocitiesToVBO(int N, vec3 *vel, float *vbo, float s_scale)
 {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 
@@ -209,15 +203,13 @@ __global__ void kernCopyVelocitiesToVBO(int N, glm::vec3 *vel, float *vbo, float
 	}
 }
 
-/**
-* Wrapper for call to the kernCopyboidsToVBO CUDA kernel.
-*/
+/* Wrapper for call to the kernCopyboidsToVBO CUDA kernel */
 void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities)
 {
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 
-	kernCopyPositionsToVBO <<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_pos, vbodptr_positions, scene_scale);
-	kernCopyVelocitiesToVBO <<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_vel1, vbodptr_velocities, scene_scale);
+	kernCopyPositionsToVBO <<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_pos.raw_ptr(), vbodptr_positions, scene_scale);
+	kernCopyVelocitiesToVBO <<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_vel1.raw_ptr(), vbodptr_velocities, scene_scale);
 
 	checkCUDAErrorWithLine("copyBoidsToVBO failed!");
 
@@ -235,22 +227,22 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities)
 * Compute the new velocity on the body with index `self` due to the `N` boids
 * in the `pos` and `vel` arrays.
 */
-__device__ glm::vec3 compute_velocity_change(int N, int self, const glm::vec3 *pos, const glm::vec3 *vel)
+__device__ vec3 compute_velocity_change(int N, int self, const vec3 *pos, const vec3 *vel)
 {
-	glm::vec3 v = vel[self];
-	glm::vec3 p = pos[self];
+	vec3 v = vel[self];
+	vec3 p = pos[self];
 
 	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
 	// Rule 2: boids try to stay a distance d away from each other
 	// Rule 3: boids try to match the speed of surrounding boids
 
-	glm::vec3 perceived_center(0.0f);
-	glm::vec3 perceived_vel(0.0f);
+	vec3 perceived_center(0.0f);
+	vec3 perceived_vel(0.0f);
 	int neighbour_count_p = 0, neighbour_count_v = 0;
-	glm::vec3 c(0.0f);
+	vec3 c(0.0f);
 
 	for (int i = 0; i < N; i++) {
-		glm::vec3 b_pos = pos[i];
+		vec3 b_pos = pos[i];
 		float len = glm::distance(b_pos, p);
 
 		if (len < rule1Distance)  {
@@ -291,14 +283,14 @@ __device__ glm::vec3 compute_velocity_change(int N, int self, const glm::vec3 *p
 * TODO-1.2 implement basic flocking
 * For each of the `N` bodies, update its position based on its current velocity.
 */
-__global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos, glm::vec3 *vel1, glm::vec3 *vel2)
+__global__ void kernUpdateVelocityBruteForce(int N, vec3 *pos, vec3 *vel1, vec3 *vel2)
 {
 	// Compute a new velocity based on pos and vel1
 	// Clamp the speed
 	// Record the new velocity into vel2. Question: why NOT vel1?
 
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
-	glm::vec3 v = compute_velocity_change(N, index, pos, vel1);
+	vec3 v = compute_velocity_change(N, index, pos, vel1);
 	if (glm::length(v) > maxSpeed)
 		v = v * (maxSpeed / glm::length(v));
 	vel2[index] = v;
@@ -309,14 +301,14 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos, glm::vec3 *v
 * LOOK-1.2 Since this is pretty trivial, we implemented it for you.
 * For each of the `N` bodies, update its position based on its current velocity.
 */
-__global__ void kernUpdatePos(int N, float dt, glm::vec3 *pos, glm::vec3 *vel)
+__global__ void kernUpdatePos(int N, float dt, vec3 *pos, vec3 *vel)
 {
 	// Update position by velocity
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 	if (index >= N)
 		return;
 
-	glm::vec3 thisPos = pos[index] + vel[index] * dt;
+	vec3 thisPos = pos[index] + vel[index] * dt;
 
 	// Wrap the boids around so we don't lose them
 	thisPos.x = thisPos.x < -scene_scale ? scene_scale : (thisPos.x > scene_scale ? -scene_scale : thisPos.x);
@@ -338,8 +330,8 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution)
 }
 
 __global__ void kernComputeIndices(int N, int gridResolution,
-	glm::vec3 gridMin, float inverseCellWidth,
-	glm::vec3 *pos, int *indices, int *gridIndices) {
+	vec3 gridMin, float inverseCellWidth,
+	vec3 *pos, int *indices, int *gridIndices) {
 		// TODO-2.1
 		// - Label each boid with the index of its grid cell.
 		// - Set up a parallel array of integer indices as pointers to the actual
@@ -365,11 +357,11 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
 }
 
 __global__ void kernUpdateVelNeighborSearchScattered(
-	int N, int gridResolution, glm::vec3 gridMin,
+	int N, int gridResolution, vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
 	int *gridCellStartIndices, int *gridCellEndIndices,
 	int *particleArrayIndices,
-	glm::vec3 *pos, glm::vec3 *vel1, glm::vec3 *vel2) {
+	vec3 *pos, vec3 *vel1, vec3 *vel2) {
 	// TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
 	// the number of boids that need to be checked.
 	// - Identify the grid cell that this particle is in
@@ -381,10 +373,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
-	int N, int gridResolution, glm::vec3 gridMin,
+	int N, int gridResolution, vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
 	int *gridCellStartIndices, int *gridCellEndIndices,
-	glm::vec3 *pos, glm::vec3 *vel1, glm::vec3 *vel2) {
+	vec3 *pos, vec3 *vel1, vec3 *vel2) {
 	// TODO-2.3 - This should be very similar to kernUpdateVelNeighborSearchScattered,
 	// except with one less level of indirection.
 	// This should expect gridCellStartIndices and gridCellEndIndices to refer
@@ -409,10 +401,10 @@ void Boids::stepSimulationNaive(float dt)
 	
 	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
 
-	kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos, dev_vel1);
+	kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos.raw_ptr(), dev_vel1.raw_ptr());
 	checkCUDAErrorWithLine("kernUpdatePos failed!");
 
-	kernUpdateVelocityBruteForce<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_pos, dev_vel1, dev_vel2);
+	kernUpdateVelocityBruteForce<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_pos.raw_ptr(), dev_vel1.raw_ptr(), dev_vel2.raw_ptr());
 	std::swap(dev_vel1, dev_vel2);
 
 
@@ -455,9 +447,9 @@ void Boids::stepSimulationCoherentGrid(float dt)
 
 void Boids::endSimulation()
 {
-	cudaFree(dev_vel1);
-	cudaFree(dev_vel2);
-	cudaFree(dev_pos);
+	cu::del(dev_pos);
+	cu::del(dev_vel1);
+	cu::del(dev_vel2);
 
 	// TODO-2.1 TODO-2.3 - Free any additional buffers here.
 }
@@ -467,9 +459,9 @@ void Boids::unitTest()
 	// LOOK-1.2 Feel free to write additional tests here.
 
 	// test unstable sort
-	int *dev_intKeys;
-	int *dev_intValues;
 	int N = 10;
+	cu::cVec<int> dev_intKeys(N);
+	cu::cVec<int> dev_intValues(N);
 
 	std::unique_ptr<int[]>intKeys{ new int[N] };
 	std::unique_ptr<int[]>intValues{ new int[N] };
@@ -485,11 +477,6 @@ void Boids::unitTest()
 	intKeys[8] = 5; intValues[8] = 8;
 	intKeys[9] = 6; intValues[9] = 9;
 
-	cudaMalloc((void**)&dev_intKeys, N * sizeof(int));
-	checkCUDAErrorWithLine("cudaMalloc dev_intKeys failed!");
-
-	cudaMalloc((void**)&dev_intValues, N * sizeof(int));
-	checkCUDAErrorWithLine("cudaMalloc dev_intValues failed!");
 
 	dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
 
@@ -500,19 +487,18 @@ void Boids::unitTest()
 	}
 
 	// How to copy data to the GPU
-	cudaMemcpy(dev_intKeys, intKeys.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
-	cudaMemcpy(dev_intValues, intValues.get(), sizeof(int) * N, cudaMemcpyHostToDevice);
+	cu::copy(dev_intKeys.ptr(), intKeys.get(), N);
+	cu::copy(dev_intValues.ptr(), intValues.get(), N);
 
 	// Wrap device vectors in thrust iterators for use with thrust.
-	thrust::device_ptr<int> dev_thrust_keys(dev_intKeys);
-	thrust::device_ptr<int> dev_thrust_values(dev_intValues);
+	thrust::device_ptr<int> dev_thrust_keys(dev_intKeys.raw_ptr());
+	thrust::device_ptr<int> dev_thrust_values(dev_intValues.raw_ptr());
 	// LOOK-2.1 Example for using thrust::sort_by_key
 	thrust::sort_by_key(dev_thrust_keys, dev_thrust_keys + N, dev_thrust_values);
 
 	// How to copy data back to the CPU side from the GPU
-	cudaMemcpy(intKeys.get(), dev_intKeys, sizeof(int) * N, cudaMemcpyDeviceToHost);
-	cudaMemcpy(intValues.get(), dev_intValues, sizeof(int) * N, cudaMemcpyDeviceToHost);
-	checkCUDAErrorWithLine("memcpy back failed!");
+	cu::copy(intKeys.get(), dev_intKeys.ptr(), N);
+	cu::copy(intValues.get(), dev_intValues.ptr(), N);
 
 	std::cout << "after unstable sort: " << std::endl;
 	for (int i = 0; i < N; i++) {
@@ -520,9 +506,5 @@ void Boids::unitTest()
 		std::cout << " value: " << intValues[i] << std::endl;
 	}
 
-	// cleanup
-	cudaFree(dev_intKeys);
-	cudaFree(dev_intValues);
-	checkCUDAErrorWithLine("cudaFree failed!");
 	return;
 }
