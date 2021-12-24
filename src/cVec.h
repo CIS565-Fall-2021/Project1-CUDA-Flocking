@@ -20,7 +20,7 @@ cPtr<T> make(size_t len) {
 template <typename T>
 /* deletes device array */
 static void del(cPtr<T> p) {
-	cudaFree(p.raw_ptr());
+	cudaFree(p.get());
 	checkCUDAError("cVec: cudaFree failed!");
 }
 
@@ -59,35 +59,35 @@ public:
 	bool operator< (const cPtr<T> &b) const { return p < b.p; }
 	bool operator> (const cPtr<T> &b) const { return p > b.p; }
 
-	T *raw_ptr()  { return p; }
-	const T *raw_ptr() const { return p; }
+	T *get()  { return p; }
+	const T *get() const { return p; }
 };
 
 template <typename T>
 /* set n elements to val */
 void set(cPtr<T> dst, const T val, size_t n = 1) {
-	cudaMemset(dst.raw_ptr(), val, n * sizeof(T));
+	cudaMemset(dst.get(), val, n * sizeof(T));
 	checkCUDAError("cuda memset failed!");
 }
 
 template <typename T>
 /* copies n elements from device pointer src to device pointer dst */
 void copy(cPtr<T> dst, const cPtr<T> src, size_t n) {
-	cudaMemcpy(dst.raw_ptr(), src.raw_ptr(), n * sizeof(T), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(dst.get(), src.get(), n * sizeof(T), cudaMemcpyDeviceToDevice);
 	checkCUDAError("cuda memcpy device to device failed!");
 }
 
 template <typename T>
 /* copies n elements from host pointer src to device pointer dst */
 void copy(cPtr<T> dst, const T* src, size_t n) {
-	cudaMemcpy(dst.raw_ptr(), src, n * sizeof(T), cudaMemcpyHostToDevice);
+	cudaMemcpy(dst.get(), src, n * sizeof(T), cudaMemcpyHostToDevice);
 	checkCUDAError("cuda memcpy host to device failed!");
 }
 
 template <typename T>
 /* copies n elements from device pointer src to host pointer dst */
 void copy(T *dst, const cPtr<T> src, size_t n) {
-	cudaMemcpy(dst, src.raw_ptr(), n * sizeof(T), cudaMemcpyDeviceToHost);
+	cudaMemcpy(dst, src.get(), n * sizeof(T), cudaMemcpyDeviceToHost);
 	checkCUDAError("cuda memcpy device to host failed!");
 }
 
@@ -178,7 +178,7 @@ public:
 
 	cPtr<T> ptr() { return p; }
 
-	T *raw_ptr() { return p.raw_ptr(); }
+	T *get() { return p.get(); }
 
 	/* "decay" to pointer when operating on an array
 	* e.g. for a vector v,   you can do set(v + (N-1), host_ptr, 1) instead of set(v.ptr() + (N-1),...)
