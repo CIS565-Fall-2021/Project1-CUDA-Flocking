@@ -8,14 +8,14 @@
 #include "cVec.h"
 
 // LOOK-2.1 potentially useful for doing grid-based neighbor search
-#ifndef MAX
+/*#ifndef MAX
 #define MAX( a, b ) ( ((a) > (b)) ? (a) : (b) )
 #endif
 
 #ifndef MIN
 #define MIN( a, b ) ( ((a) < (b)) ? (a) : (b) )
 #endif
-
+*/
 #define checkCUDAErrorWithLine(msg) checkCUDAError(msg, __LINE__)
 
 /* Check for CUDA errors; print and exit if there was a problem */
@@ -29,6 +29,17 @@ void checkCUDAError(const char *msg, int line = -1)
 		fprintf(stderr, "Cuda error: %s: %s.\n", msg, cudaGetErrorString(err));
 		exit(EXIT_FAILURE);
 	}
+}
+
+/* better max and min functions*/
+template <typename T>
+__host__ __device__ T max(T v) {
+	return v;
+}
+
+template <typename T, typename... U>
+__host__ __device__ T max(T v1, T v2, U ... vs) {
+	return max(v1 > v2 ? v1 : v2, vs...);
 }
 
 
@@ -154,7 +165,7 @@ void Boids::initSimulation(int N)
 	checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
 	// LOOK-2.1 computing grid params
-	gridCellWidth = 2.0f * std::max(std::max(rule1_dist, rule2_dist), rule3_dist);
+	gridCellWidth = 2.0f * max(rule1_dist, rule2_dist, rule3_dist); //std::max(std::max(rule1_dist, rule2_dist), rule3_dist);
 	int halfSideCount = (int)(scene_scale / gridCellWidth) + 1;
 	gridSideCount = 2 * halfSideCount;
 
@@ -336,6 +347,13 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution)
 	return x + y * gridResolution + z * gridResolution * gridResolution;
 }
 
+__device__ dim3 boid_cell(vec3 gridMin, float inverseCellWidth, vec3 pos)
+{
+	vec3 offset = (pos - gridMin) * inverseCellWidth;
+	return dim3(offset.x, offset.y, offset.z);
+
+}
+
 __global__ void kernComputeIndices(int N, int gridResolution,
 	vec3 gridMin, float inverseCellWidth,
 	vec3 *pos, int *indices, int *gridIndices) {
@@ -392,7 +410,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	vec3 *pos, vec3 *vel1, vec3 *vel2) {
 	// TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
 	// the number of boids that need to be checked.
-	// - Identify the grid cell that this particle is in
+
 	// - Identify which cells may contain neighbors. This isn't always 8.
 	// - For each cell, read the start/end indices in the boid pointer array.
 	// - Access each boid in the cell and compute velocity change from
@@ -400,6 +418,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	// - Clamp the speed change before putting the new speed in vel2
 
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	// - Identify the grid cell that this particle is in
+	vec3 offset = (pos[index] - gridMin) * inverseCellWidth;
+
 	
 }
 
@@ -442,12 +464,6 @@ void Boids::stepSimulationNaive(float dt)
 
 void Boids::stepSimulationScatteredGrid(float dt)
 {
-	// TODO-2.1
-	// Uniform Grid Neighbor search using Thrust sort.
-	// In Parallel:
-
-	// - Update positions
-	// - Ping-pong buffers as needed
 	int blocks_per_grid = (num_boids + block_size - 1) / block_size;
 	
 	// - label each particle with its array index as well as its grid index.
@@ -473,7 +489,12 @@ void Boids::stepSimulationScatteredGrid(float dt)
 		dv_pos.get(), dv_vel1.get(), dv_vel2.get());
 	checkCUDAErrorWithLine("kernUpdateVelNeighborSearchScattered failed!");
 
-
+	// - Update positions
+	kernUpdatePos<<<blocks_per_grid, block_size>>>(num_boids, dt, dv_pos.get(), dv_vel2.get());
+	checkCUDAErrorWithLine("kernUpdatePos failed!");
+	
+	// - Ping-pong buffers
+	std::swap(dv_vel1, dv_vel2);
 }
 
 void Boids::stepSimulationCoherentGrid(float dt)
