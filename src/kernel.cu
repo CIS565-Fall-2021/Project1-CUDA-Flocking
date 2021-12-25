@@ -265,6 +265,8 @@ __device__ vec3 compute_velocity_change(int N, int idx, const vec3 *pos, const v
 	vec3 c(0.0f);
 
 	for (int i = 0; i < N; i++) {
+		if (i == idx)
+			continue;
 		vec3 b_pos = pos[i];
 		float len = glm::distance(b_pos, p);
 
@@ -283,21 +285,16 @@ __device__ vec3 compute_velocity_change(int N, int idx, const vec3 *pos, const v
 		}
 	}
 
-	perceived_center -= p;
-	perceived_vel -= v;
-	neighbour_count_p--;
-	neighbour_count_v--;
-
 	if (neighbour_count_p > 0) {
 		perceived_center /= neighbour_count_p;
+		v += (perceived_center - p) * rule1_scale;
 	}
+	v += c * rule2_scale;
 	if (neighbour_count_v > 0) {
 		perceived_vel /= neighbour_count_v;
+		v += perceived_vel * rule3_scale;
 	}
 
-	v += (perceived_center - p) * rule1_scale;
-	v += c * rule2_scale;
-	v += perceived_vel * rule3_scale;
 
 	return v;
 }
@@ -437,23 +434,23 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				//   the boids rules, if this boid is within the neighborhood distance.
 				for (int i = start; i <= end; i++) {
 					int b2 = particleArrayIndices[i];
-					if (index != b2) {
-						vec3 b_pos = pos[b2];
-						float len = glm::distance(b_pos, p);
+					if (index == b2)
+						continue;
+					vec3 b_pos = pos[b2];
+					float len = glm::distance(b_pos, p);
 
-						if (len < rule1_dist)  {
-							perceived_center += b_pos;
-							neighbour_count_p++;
-						}
+					if (len < rule1_dist)  {
+						perceived_center += b_pos;
+						neighbour_count_p++;
+					}
 				
-						if (len < rule2_dist)  {
-							c -= (b_pos - p);
-						}
+					if (len < rule2_dist)  {
+						c -= (b_pos - p);
+					}
 			
-						if (len < rule3_dist) {
-							perceived_vel += vel1[b2];
-							neighbour_count_v++;
-						}
+					if (len < rule3_dist) {
+						perceived_vel += vel1[b2];
+						neighbour_count_v++;
 					}
 				}
 			}
@@ -482,19 +479,6 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	float inverseCellWidth, float cellWidth,
 	const int *gridCellStartIndices, const int *gridCellEndIndices,
 	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
-	// TODO-2.3 - This should be very similar to kernUpdateVelNeighborSearchScattered,
-	// except with one less level of indirection.
-	// This should expect gridCellStartIndices and gridCellEndIndices to refer
-	// directly to pos and vel1.
-	// - Identify the grid cell that this particle is in
-	// - Identify which cells may contain neighbors. This isn't always 8.
-	// - For each cell, read the start/end indices in the boid pointer array.
-	//   DIFFERENCE: For best results, consider what order the cells should be
-	//   checked in to maximize the memory benefits of reordering the boids data.
-	// - Access each boid in the cell and compute velocity change from
-	//   the boids rules, if this boid is within the neighborhood distance.
-	// - Clamp the speed change before putting the new speed in vel2
-
 
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
@@ -520,7 +504,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	int neighbour_count_p = 0, neighbour_count_v = 0;
 	vec3 c(0.0f);
  
-
+	/* when converting 3d gridpoints to 1d ints, vals across x are stored sequentially followed by y and then z
+	 * so the lookup going in the oppossite order is likely the most efficient */
 	for (int z = mincoords.z; z <= maxcoords.z; z++) {
 		for (int y = mincoords.y; y <= maxcoords.y; y++) {
 			for (int x = mincoords.x; x <= maxcoords.x; x++) {
@@ -533,23 +518,23 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 				// - Access each boid in the cell and compute velocity change from
 				//   the boids rules, if this boid is within the neighborhood distance.
 				for (int b2 = start; b2 <= end; b2++) {
-					if (index != b2) {
-						vec3 b_pos = pos[b2];
-						float len = glm::distance(b_pos, p);
+					if (index == b2)
+						continue;
+					vec3 b_pos = pos[b2];
+					float len = glm::distance(b_pos, p);
 
-						if (len < rule1_dist)  {
-							perceived_center += b_pos;
-							neighbour_count_p++;
-						}
+					if (len < rule1_dist)  {
+						perceived_center += b_pos;
+						neighbour_count_p++;
+					}
 				
-						if (len < rule2_dist)  {
-							c -= (b_pos - p);
-						}
+					if (len < rule2_dist)  {
+						c -= (b_pos - p);
+					}
 			
-						if (len < rule3_dist) {
-							perceived_vel += vel1[b2];
-							neighbour_count_v++;
-						}
+					if (len < rule3_dist) {
+						perceived_vel += vel1[b2];
+						neighbour_count_v++;
 					}
 				}
 			}
