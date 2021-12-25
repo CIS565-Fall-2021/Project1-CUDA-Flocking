@@ -206,7 +206,7 @@ void Boids::initSimulation(int N)
 ******************/
 
 /* Copy the boid positions into the VBO so that they can be drawn by OpenGL */
-__global__ void kernCopyPositionsToVBO(int N, vec3 *pos, float *vbo, float s_scale)
+__global__ void kernCopyPositionsToVBO(int N, const vec3 *pos, float *vbo, float s_scale)
 {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 
@@ -220,7 +220,7 @@ __global__ void kernCopyPositionsToVBO(int N, vec3 *pos, float *vbo, float s_sca
 	}
 }
 
-__global__ void kernCopyVelocitiesToVBO(int N, vec3 *vel, float *vbo, float s_scale)
+__global__ void kernCopyVelocitiesToVBO(int N, const vec3 *vel, float *vbo, float s_scale)
 {
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
 
@@ -311,7 +311,7 @@ __device__ vec3 compute_velocity_change(int N, int idx, const vec3 *pos, const v
 * TODO-1.2 implement basic flocking
 * For each of the `N` bodies, update its position based on its current velocity.
 */
-__global__ void kernUpdateVelocityBruteForce(int N, vec3 *pos, vec3 *vel1, vec3 *vel2)
+__global__ void kernUpdateVelocityBruteForce(int N, const vec3 *pos, const vec3 *vel1, vec3 *vel2)
 {
 	// Compute a new velocity based on pos and vel1
 	// Clamp the speed
@@ -328,7 +328,7 @@ __global__ void kernUpdateVelocityBruteForce(int N, vec3 *pos, vec3 *vel1, vec3 
 * LOOK-1.2 Since this is pretty trivial, we implemented it for you.
 * For each of the `N` bodies, update its position based on its current velocity.
 */
-__global__ void kernUpdatePos(int N, float dt, vec3 *pos, vec3 *vel)
+__global__ void kernUpdatePos(int N, float dt, vec3 *pos, const vec3 *vel)
 {
 	// Update position by velocity
 	int index = threadIdx.x + (blockIdx.x * blockDim.x);
@@ -358,7 +358,7 @@ __device__ int gridIndex3Dto1D(int x, int y, int z, int gridResolution)
 
 __global__ void kernComputeIndices(int N, int gridResolution,
 	vec3 gridMin, float inverseCellWidth,
-	vec3 *pos, int *indices, int *gridIndices) {
+	const vec3 *pos, int * __restrict__ indices, int * __restrict__ gridIndices) {
 		// TODO-2.1
 		// - Label each boid with the index of its grid cell.
 		// - Set up a parallel array of integer indices as pointers to the actual
@@ -383,8 +383,8 @@ __global__ void kernComputeIndices(int N, int gridResolution,
 //}
 //// USE cu::set (i.e. cudaMemset) instead of this, set everything to -1
 
-__global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
-	int *gridCellStartIndices, int *gridCellEndIndices) {
+__global__ void kernIdentifyCellStartEnd(int N, const int *particleGridIndices,
+	int *__restrict__ gridCellStartIndices, int *__restrict__ gridCellEndIndices) {
 	// TODO-2.1
 	// Identify the start point of each cell in the gridIndices array.
 	// This is basically a parallel unrolling of a loop that goes
@@ -392,7 +392,7 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (index >= N)
 		return;
-	
+
 	if (index == 0)
 		gridCellStartIndices[particleGridIndices[0]] = 0;
 	else if (particleGridIndices[index] != particleGridIndices[index-1])
@@ -407,19 +407,19 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
 __global__ void kernUpdateVelNeighborSearchScattered(
 	int N, int gridResolution, vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
-	int *gridCellStartIndices, int *gridCellEndIndices,
-	int *particleArrayIndices,
-	vec3 *pos, vec3 *vel1, vec3 *vel2) {
+	const int *gridCellStartIndices, const int *gridCellEndIndices,
+	const int *particleArrayIndices,
+	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
 	// TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
 	// the number of boids that need to be checked.
 
-	// - Clamp the speed change before putting the new speed in vel2
 
 	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	// - Identify the grid cell that this particle is in
-	vec3 offset = (pos[index] - gridMin) * inverseCellWidth;
+	if (index >= N)
+		return;
 
+	// - Identify the grid cell that this particle is in
 	// - Identify which cells may contain neighbors. This isn't always 8.
 	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
 	// get the minimum and maximum coords of the neighborhood
@@ -437,15 +437,11 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	vec3 perceived_vel(0.0f);
 	int neighbour_count_p = 0, neighbour_count_v = 0;
 	vec3 c(0.0f);
+ 
 
-
-	// data is laid out sequentially in x, then y, then z so ordering the accesses in reverse is likely most efficient
 	for (int z = mincoords.z; z <= maxcoords.z; z++) {
 		for (int y = mincoords.y; y <= maxcoords.y; y++) {
 			for (int x = mincoords.x; x <= maxcoords.x; x++) {
-				if (index == 1000) {
-					printf("(%d, %d, %d)\n", x, y, z);
-				}
 				// - For each cell, read the start/end indices in the boid pointer array.
 				int start = gridCellStartIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
 				int end = gridCellEndIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
@@ -457,7 +453,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				for (int i = start; i <= end; i++) {
 					int b2 = particleArrayIndices[i];
 					if (index != b2) {
-						vec3 b_pos = pos[b2]; /* adapted from naive impl */
+						vec3 b_pos = pos[b2];
 						float len = glm::distance(b_pos, p);
 
 						if (len < rule1_dist)  {
@@ -489,6 +485,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		v += perceived_vel * rule3_scale;
 	}
 
+	// - Clamp the speed change before putting the new speed in vel2
 	if (glm::length(v) > max_speed)
 		v = v * (max_speed / glm::length(v));
 
@@ -498,8 +495,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 __global__ void kernUpdateVelNeighborSearchCoherent(
 	int N, int gridResolution, vec3 gridMin,
 	float inverseCellWidth, float cellWidth,
-	int *gridCellStartIndices, int *gridCellEndIndices,
-	vec3 *pos, vec3 *vel1, vec3 *vel2) {
+	const int *gridCellStartIndices, const int *gridCellEndIndices,
+	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
 	// TODO-2.3 - This should be very similar to kernUpdateVelNeighborSearchScattered,
 	// except with one less level of indirection.
 	// This should expect gridCellStartIndices and gridCellEndIndices to refer
