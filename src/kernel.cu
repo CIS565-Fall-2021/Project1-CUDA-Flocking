@@ -428,7 +428,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
 	int side_max = gridResolution - 1;
 	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
-	dim3 maxcoords = dim3(min(side_max, (int) minv.x), min(side_max, (int) minv.y), min(side_max, (int) minv.z));
+	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
 
 	vec3 p = pos[index];
 	vec3 v = vel1[index];
