@@ -440,56 +440,54 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
 
 	// data is laid out sequentially in x, then y, then z so ordering the accesses in reverse is likely most efficient
-	for (dim3 cell = mincoords; cell.z <= maxcoords.z; cell.z++) {
-		for (; cell.y <= maxcoords.y; cell.y++) {
-			for (; cell.x <= maxcoords.x; cell.x++) {
+	for (int z = mincoords.z; z <= maxcoords.z; z++) {
+		for (int y = mincoords.y; y <= maxcoords.y; y++) {
+			for (int x = mincoords.x; x <= maxcoords.x; x++) {
+				if (index == 1000) {
+					printf("(%d, %d, %d)\n", x, y, z);
+				}
 				// - For each cell, read the start/end indices in the boid pointer array.
-				int start = gridCellStartIndices[gridIndex3Dto1D(cell.x, cell.y, cell.z, gridResolution)];
-				int end = gridCellEndIndices[gridIndex3Dto1D(cell.x, cell.y, cell.z, gridResolution)];
-				if (start == -1 || end == -1)
-					return;
+				int start = gridCellStartIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
+				int end = gridCellEndIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
+				if (start == -1)
+					continue;
 
 				// - Access each boid in the cell and compute velocity change from
 				//   the boids rules, if this boid is within the neighborhood distance.
-				for (int i = start; i < end; i++) {
+				for (int i = start; i <= end; i++) {
 					int b2 = particleArrayIndices[i];
-					vec3 b_pos = pos[i]; /* copied from naive impl */
-					float len = glm::distance(b_pos, p);
+					if (index != b2) {
+						vec3 b_pos = pos[b2]; /* adapted from naive impl */
+						float len = glm::distance(b_pos, p);
 
-					if (len < rule1_dist)  {
-						perceived_center += b_pos;
-						neighbour_count_p++;
-					}
+						if (len < rule1_dist)  {
+							perceived_center += b_pos;
+							neighbour_count_p++;
+						}
+				
+						if (len < rule2_dist)  {
+							c -= (b_pos - p);
+						}
 			
-					if (len < rule2_dist)  {
-						c -= (b_pos - p);
+						if (len < rule3_dist) {
+							perceived_vel += vel1[b2];
+							neighbour_count_v++;
+						}
 					}
-			
-					if (len < rule3_dist) {
-						perceived_vel += vel1[i];
-						neighbour_count_v++;
-					}
-			
 				}
 			}
 		}
 	}
 
-	perceived_center -= p; /* remove the current boid's pos/vel we counted in the loop */
-	perceived_vel -= v;
-	neighbour_count_p--;
-	neighbour_count_v--;
-
 	if (neighbour_count_p > 0) {
 		perceived_center /= neighbour_count_p;
+		v += (perceived_center - p) * rule1_scale;
 	}
+	v += c * rule2_scale;
 	if (neighbour_count_v > 0) {
 		perceived_vel /= neighbour_count_v;
+		v += perceived_vel * rule3_scale;
 	}
-
-	v += (perceived_center - p) * rule1_scale;
-	v += c * rule2_scale;
-	v += perceived_vel * rule3_scale;
 
 	if (glm::length(v) > max_speed)
 		v = v * (max_speed / glm::length(v));
@@ -549,7 +547,6 @@ void Boids::stepSimulationScatteredGrid(float dt)
 	// - Naively unroll the loop for finding the start and end indices of each
 	//   cell's data pointers in the array of boid indices
 	cu::set(dv_gridcell_start_indices, -1, gridCellCount);
-	cu::set(dv_gridcell_end_indices, -1, gridCellCount); /* is this actually necessary? */
 
 	kernIdentifyCellStartEnd<<<blocks_per_grid, block_size>>>(num_boids, dv_particle_grid_indices.get(),
 		dv_gridcell_start_indices.get(), dv_gridcell_end_indices.get());
