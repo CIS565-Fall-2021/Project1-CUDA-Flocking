@@ -493,8 +493,11 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
 	// get the minimum and maximum coords of the neighborhood
 	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f);
-	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	//vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
+	//vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
+	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
+	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
 	int side_max = gridResolution - 1;
 	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
 	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
