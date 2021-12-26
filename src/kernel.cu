@@ -406,8 +406,11 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
 	// get the minimum and maximum coords of the neighborhood
 	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f);
-	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	//vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
+	//vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
+	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
+	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
 	int side_max = gridResolution - 1;
 	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
 	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
@@ -420,7 +423,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	int neighbour_count_p = 0, neighbour_count_v = 0;
 	vec3 c(0.0f);
  
-
+	
 	for (int z = mincoords.z; z <= maxcoords.z; z++) {
 		for (int y = mincoords.y; y <= maxcoords.y; y++) {
 			for (int x = mincoords.x; x <= maxcoords.x; x++) {
