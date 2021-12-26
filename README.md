@@ -1,8 +1,6 @@
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture,
 Project 1 - Flocking**
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
-
 * Kaan Erdogmus
   * [LinkedIn](https://linkedin.com/in/kaanberk), [personal website](https://kaan9.github.io)
 * Tested on: Windows 10, i7-8850H @ 2.592GHz 24GB, Quadro P1000
