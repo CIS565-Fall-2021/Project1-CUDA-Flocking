@@ -8,6 +8,10 @@
 #include "cVec.h"
 
 
+#define GRID_LOOP 0
+#define ALWAYS_27 0
+/* always checking 27 cells only enabled if GRID_LOOP is 0*/
+
 #define checkCUDAErrorWithLine(msg) checkCUDAError(msg, __LINE__)
 
 /* Check for CUDA errors; print and exit if there was a problem */
@@ -246,7 +250,7 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities)
 ******************/
 
 /* p is position of this boid, boid_pos, boid_vel are of neighbour we*/
-__device__ __forceinline__ void apply_rule_effects(const vec3 &p, const vec3 &boid_pos, const vec3 &boid_vel,
+__device__ __forceinline__ void apply_rules(const vec3 &p, const vec3 &boid_pos, const vec3 &boid_vel,
 	vec3 *perceived_center, vec3 *perceived_vel, vec3 *c,
 	int *neighbour_count_p, int *neighbour_count_v)
 {
@@ -304,7 +308,7 @@ __global__ void kern_update_vel_brute_force(int N, const vec3 *pos, const vec3 *
 
 	for (int i = 0; i < N; i++) {
 		if (i != idx)
-			apply_rule_effects(p, pos[i], vel1[i], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
+			apply_rules(p, pos[i], vel1[i], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
 	}
 
 	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
@@ -380,48 +384,35 @@ __global__ void kernIdentifyCellStartEnd(int N, const int *particleGridIndices,
 
 }
 
-__global__ void kernUpdateVelNeighborSearchScattered(
-	int N, int gridResolution, vec3 gridMin,
-	float inverseCellWidth, float cellWidth,
-	const int *gridCellStartIndices, const int *gridCellEndIndices,
-	const int *particleArrayIndices,
-	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
-	// TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
-	// the number of boids that need to be checked.
-
-
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-
-	if (idx >= N)
-		return;
-
-	vec3 p = pos[idx];
-	vec3 v = vel1[idx];
-
-	vec3 perceived_center(0.0f);
-	vec3 perceived_vel(0.0f);
-	int neighbour_count_p = 0, neighbour_count_v = 0;
-	vec3 c(0.0f);
-
-
-	/* function that produces values of b2 to use in apply_rule_effects, that's it right? */
-
+/* boid_search_apply iterates over the boids of the neighbouring cells and executes function apply_rules_b2 with
+ * their indices: in the case of the scattered grid, this is the indices that go into particleGridIndices
+ * in the case of coherent grid, the indices are directly the indices of the boids in the pos and vel arrays */
+/* F is a function that takes in the neighbour boid index/particleArrayIndex index as determined by this function */
+template <typename F>
+__device__ __forceinline__ void boid_search_apply(const vec3 &p, int gridResolution, vec3 gridMin, float inverseCellWidth,
+	const int *gridCellStartIndices, const int *gridCellEndIndices, F apply_rules_b2)
+{
 	// - Identify the grid cell that this particle is in
 	// - Identify which cells may contain neighbors. This isn't always 8.
-	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
-	// get the minimum and maximum coords of the neighborhood
-	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	//vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
-	//vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
-	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
-	vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
-	vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
-	int side_max = gridResolution - 1;
-	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
-	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
 
- 
-	
+#if GRID_LOOP
+	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
+	vec3 minv = (p - gridMin) * inverseCellWidth - dist; /* grid looping optimization */
+	vec3 maxv = (p - gridMin) * inverseCellWidth + dist;
+#else
+ #if ALWAYS_27
+	vec3 minv = (p - gridMin) * inverseCellWidth - 1.0f; /* always checks 27 squares */
+	vec3 maxv = (p - gridMin) * inverseCellWidth + 1.0f;
+
+ #else
+	vec3 minv = (p - gridMin) * inverseCellWidth - 0.5f; /* always checks 8 squares */
+	vec3 maxv = (p - gridMin) * inverseCellWidth + 0.5f;
+ #endif
+#endif
+
+	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
+	dim3 maxcoords = dim3(min(gridResolution - 1, (int) maxv.x), min(gridResolution - 1, (int) maxv.y), min(gridResolution - 1, (int) maxv.z));
+
 	for (int z = mincoords.z; z <= maxcoords.z; z++) {
 		for (int y = mincoords.y; y <= maxcoords.y; y++) {
 			for (int x = mincoords.x; x <= maxcoords.x; x++) {
@@ -434,20 +425,51 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				// - Access each boid in the cell and compute velocity change from
 				//   the boids rules, if this boid is within the neighborhood distance.
 				for (int i = start; i <= end; i++) {
-					int b2 = particleArrayIndices[i];
-					if (idx != b2)
-						apply_rule_effects(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
+					apply_rules_b2(i);
 				}
 			}
 		}
 	}
+
+}
+
+__global__ void kernUpdateVelNeighborSearchScattered(
+	int N, int gridResolution, vec3 gridMin,
+	float inverseCellWidth,
+	const int *gridCellStartIndices, const int *gridCellEndIndices,
+	const int *particleArrayIndices,
+	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
+	// TODO-2.1 - Update a boid's velocity using the uniform grid to reduce
+	// the number of boids that need to be checked.
+
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	if (idx >= N)
+		return;
+
+	vec3 p = pos[idx];
+	vec3 v = vel1[idx];
+
+	vec3 perceived_center(0.0f);
+	vec3 perceived_vel(0.0f);
+	int neighbour_count_p = 0, neighbour_count_v = 0;
+	vec3 c(0.0f);
+
+
+	boid_search_apply(p, gridResolution, gridMin, inverseCellWidth, gridCellStartIndices, gridCellEndIndices,
+		[&] (int i) {
+			int b2 = particleArrayIndices[i];
+			if (idx != b2)
+				apply_rules(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
+		});
+
 
 	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
 	int N, int gridResolution, vec3 gridMin,
-	float inverseCellWidth, float cellWidth,
+	float inverseCellWidth,
 	const int *gridCellStartIndices, const int *gridCellEndIndices,
 	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
 
@@ -464,43 +486,15 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	int neighbour_count_p = 0, neighbour_count_v = 0;
 	vec3 c(0.0f);
 
-	// - Identify the grid cell that this particle is in
-	// - Identify which cells may contain neighbors. This isn't always 8.
-	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
-	// get the minimum and maximum coords of the neighborhood
-	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	//vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
-	//vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
-	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
-	vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
-	vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
-	int side_max = gridResolution - 1;
-	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
-	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
-
- 
-	/* when converting 3d gridpoints to 1d ints, vals across x are stored sequentially followed by y and then z
-	 * so the lookup going in the oppossite order is likely the most efficient */
-	for (int z = mincoords.z; z <= maxcoords.z; z++) {
-		for (int y = mincoords.y; y <= maxcoords.y; y++) {
-			for (int x = mincoords.x; x <= maxcoords.x; x++) {
-				// - For each cell, read the start/end indices in the boid pointer array.
-				int start = gridCellStartIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
-				int end = gridCellEndIndices[gridIndex3Dto1D(x, y, z, gridResolution)];
-				if (start == -1)
-					continue;
-
-				// - Access each boid in the cell and compute velocity change from
-				//   the boids rules, if this boid is within the neighborhood distance.
-				for (int b2 = start; b2 <= end; b2++)
-					if (idx != b2)
-						apply_rule_effects(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
-			}
-		}
-	}
+	boid_search_apply(p, gridResolution, gridMin, inverseCellWidth, gridCellStartIndices, gridCellEndIndices,
+		[&] (int b2) {
+			if (idx != b2)
+				apply_rules(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
+		});
 
 	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
 }
+
 
 /**
 * Step the entire N-body simulation by `dt` seconds.
@@ -543,7 +537,7 @@ void Boids::stepSimulationScatteredGrid(float dt)
 
 	// - Perform velocity updates using neighbor search
 	kernUpdateVelNeighborSearchScattered<<<blocks_per_grid, block_size>>>(num_boids, gridSideCount, gridMinimum, gridInverseCellWidth,
-		gridCellWidth, dv_gridcell_start_indices.get(), dv_gridcell_end_indices.get(), dv_particle_array_indices.get(),
+		dv_gridcell_start_indices.get(), dv_gridcell_end_indices.get(), dv_particle_array_indices.get(),
 		dv_pos.get(), dv_vel1.get(), dv_vel2.get());
 	checkCUDAErrorWithLine("kernUpdateVelNeighborSearchScattered failed!");
 
@@ -597,7 +591,7 @@ void Boids::stepSimulationCoherentGrid(float dt)
 	checkCUDAErrorWithLine("kern_rearrange_boid_data failed!");
 
 	// - Perform velocity updates using neighbor search
-	kernUpdateVelNeighborSearchCoherent<<<blocks_per_grid, block_size>>>(num_boids, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth,
+	kernUpdateVelNeighborSearchCoherent<<<blocks_per_grid, block_size>>>(num_boids, gridSideCount, gridMinimum, gridInverseCellWidth,
 		dv_gridcell_start_indices.get(), dv_gridcell_end_indices.get(), dv_pos2.get(), dv_vel2.get(), dv_vel1.get());
 	checkCUDAErrorWithLine("kernUpdateVelNeighborSearchCoherent failed!");
 
