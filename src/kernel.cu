@@ -245,19 +245,57 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities)
 * stepSimulation *
 ******************/
 
+/* p is position of this boid, boid_pos, boid_vel are of neighbour we*/
+__device__ __forceinline__ void apply_rule_effects(const vec3 &p, const vec3 &boid_pos, const vec3 &boid_vel,
+	vec3 *perceived_center, vec3 *perceived_vel, vec3 *c,
+	int *neighbour_count_p, int *neighbour_count_v)
+{
+	float len = glm::distance(boid_pos, p);
+
+	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
+	if (len < rule1_dist)  {
+		*perceived_center += boid_pos;
+		(*neighbour_count_p)++;
+	}
+
+	// Rule 2: boids try to stay a distance d away from each other
+	if (len < rule2_dist)
+		*c -= (boid_pos - p);
+
+	// Rule 3: boids try to match the speed of surrounding boids
+	if (len < rule3_dist) {
+		*perceived_vel += boid_vel;
+		(*neighbour_count_v)++;
+	}
+}
+
+__device__ __forceinline__ vec3 out_vel(const vec3 &p, vec3 v, const vec3 &perceived_center, const vec3 &perceived_vel,
+	const vec3 &c, int neighbour_count_p, int neighbour_count_v)
+{
+	if (neighbour_count_p > 0)
+		v += (perceived_center / (float) neighbour_count_p - p) * rule1_scale;
+	v += c * rule2_scale;
+	if (neighbour_count_v > 0)
+		v += perceived_vel / (float) neighbour_count_v * rule3_scale;
+
+	return v * max_speed / max(max_speed, glm::length(v)); /* clamp to max_speed */
+}
+
+
 /**
-* LOOK-1.2 You can use this as a helper for kernUpdateVelocityBruteForce.
+* TODO-1.2 implement basic flocking
+* For each of the `N` bodies, update its position based on its current velocity.
 * Compute the new velocity on the body with index `idx` due to the `N` boids
 * in the `pos` and `vel` arrays.
 */
-__device__ vec3 compute_velocity_change(int N, int idx, const vec3 *pos, const vec3 *vel)
+__global__ void kern_update_vel_brute_force(int N, const vec3 *pos, const vec3 *vel1, vec3 *vel2)
 {
-	vec3 v = vel[idx];
+	int idx= threadIdx.x + (blockIdx.x * blockDim.x);
+
+	vec3 v = vel1[idx];
 	vec3 p = pos[idx];
 
-	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-	// Rule 2: boids try to stay a distance d away from each other
-	// Rule 3: boids try to match the speed of surrounding boids
+	// Compute a new velocity based on pos and vel1
 
 	vec3 perceived_center(0.0f);
 	vec3 perceived_vel(0.0f);
@@ -265,55 +303,11 @@ __device__ vec3 compute_velocity_change(int N, int idx, const vec3 *pos, const v
 	vec3 c(0.0f);
 
 	for (int i = 0; i < N; i++) {
-		if (i == idx)
-			continue;
-		vec3 b_pos = pos[i];
-		float len = glm::distance(b_pos, p);
-
-		if (len < rule1_dist)  {
-			perceived_center += b_pos;
-			neighbour_count_p++;
-		}
-
-		if (len < rule2_dist)  {
-			c -= (b_pos - p);
-		}
-
-		if (len < rule3_dist) {
-			perceived_vel += vel[i];
-			neighbour_count_v++;
-		}
+		if (i != idx)
+			apply_rule_effects(p, pos[i], vel1[i], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
 	}
 
-	if (neighbour_count_p > 0) {
-		perceived_center /= neighbour_count_p;
-		v += (perceived_center - p) * rule1_scale;
-	}
-	v += c * rule2_scale;
-	if (neighbour_count_v > 0) {
-		perceived_vel /= neighbour_count_v;
-		v += perceived_vel * rule3_scale;
-	}
-
-
-	return v;
-}
-
-/**
-* TODO-1.2 implement basic flocking
-* For each of the `N` bodies, update its position based on its current velocity.
-*/
-__global__ void kernUpdateVelocityBruteForce(int N, const vec3 *pos, const vec3 *vel1, vec3 *vel2)
-{
-	// Compute a new velocity based on pos and vel1
-	// Clamp the speed
-	// Record the new velocity into vel2. Question: why NOT vel1?
-
-	int index = threadIdx.x + (blockIdx.x * blockDim.x);
-	vec3 v = compute_velocity_change(N, index, pos, vel1);
-	if (glm::length(v) > max_speed)
-		v = v * (max_speed / glm::length(v));
-	vel2[index] = v;
+	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
 }
 
 /**
@@ -330,9 +324,9 @@ __global__ void kernUpdatePos(int N, float dt, vec3 *pos, const vec3 *vel)
 	vec3 thisPos = pos[index] + vel[index] * dt;
 
 	// Wrap the boids around so we don't lose them
-	thisPos.x = thisPos.x < -scene_scale ? scene_scale : (thisPos.x > scene_scale ? -scene_scale : thisPos.x);
-	thisPos.y = thisPos.y < -scene_scale ? scene_scale : (thisPos.y > scene_scale ? -scene_scale : thisPos.y);
-	thisPos.z = thisPos.z < -scene_scale ? scene_scale : (thisPos.z > scene_scale ? -scene_scale : thisPos.z);
+	thisPos.x = thisPos.x < -scene_scale ? scene_scale : thisPos.x > scene_scale ? -scene_scale : thisPos.x;
+	thisPos.y = thisPos.y < -scene_scale ? scene_scale : thisPos.y > scene_scale ? -scene_scale : thisPos.y;
+	thisPos.z = thisPos.z < -scene_scale ? scene_scale : thisPos.z > scene_scale ? -scene_scale : thisPos.z;
 
 	pos[index] = thisPos;
 }
@@ -396,32 +390,36 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	// the number of boids that need to be checked.
 
 
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	if (index >= N)
+	if (idx >= N)
 		return;
+
+	vec3 p = pos[idx];
+	vec3 v = vel1[idx];
+
+	vec3 perceived_center(0.0f);
+	vec3 perceived_vel(0.0f);
+	int neighbour_count_p = 0, neighbour_count_v = 0;
+	vec3 c(0.0f);
+
+
+	/* function that produces values of b2 to use in apply_rule_effects, that's it right? */
 
 	// - Identify the grid cell that this particle is in
 	// - Identify which cells may contain neighbors. This isn't always 8.
 	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
 	// get the minimum and maximum coords of the neighborhood
 	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	//vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
-	//vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	//vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
+	//vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
 	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
-	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
-	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
+	vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
+	vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
 	int side_max = gridResolution - 1;
 	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
 	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
 
-	vec3 p = pos[index];
-	vec3 v = vel1[index];
-
-	vec3 perceived_center(0.0f);
-	vec3 perceived_vel(0.0f);
-	int neighbour_count_p = 0, neighbour_count_v = 0;
-	vec3 c(0.0f);
  
 	
 	for (int z = mincoords.z; z <= maxcoords.z; z++) {
@@ -437,44 +435,14 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				//   the boids rules, if this boid is within the neighborhood distance.
 				for (int i = start; i <= end; i++) {
 					int b2 = particleArrayIndices[i];
-					if (index == b2)
-						continue;
-					vec3 b_pos = pos[b2];
-					float len = glm::distance(b_pos, p);
-
-					if (len < rule1_dist)  {
-						perceived_center += b_pos;
-						neighbour_count_p++;
-					}
-				
-					if (len < rule2_dist)  {
-						c -= (b_pos - p);
-					}
-			
-					if (len < rule3_dist) {
-						perceived_vel += vel1[b2];
-						neighbour_count_v++;
-					}
+					if (idx != b2)
+						apply_rule_effects(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
 				}
 			}
 		}
 	}
 
-	if (neighbour_count_p > 0) {
-		perceived_center /= neighbour_count_p;
-		v += (perceived_center - p) * rule1_scale;
-	}
-	v += c * rule2_scale;
-	if (neighbour_count_v > 0) {
-		perceived_vel /= neighbour_count_v;
-		v += perceived_vel * rule3_scale;
-	}
-
-	// - Clamp the speed change before putting the new speed in vel2
-	if (glm::length(v) > max_speed)
-		v = v * (max_speed / glm::length(v));
-
-	vel2[index] = v;
+	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
 }
 
 __global__ void kernUpdateVelNeighborSearchCoherent(
@@ -483,32 +451,33 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	const int *gridCellStartIndices, const int *gridCellEndIndices,
 	const vec3 *pos, const vec3 *vel1, vec3 *vel2) {
 
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	if (index >= N)
+	if (idx >= N)
 		return;
+
+	vec3 p = pos[idx];
+	vec3 v = vel1[idx];
+
+	vec3 perceived_center(0.0f);
+	vec3 perceived_vel(0.0f);
+	int neighbour_count_p = 0, neighbour_count_v = 0;
+	vec3 c(0.0f);
 
 	// - Identify the grid cell that this particle is in
 	// - Identify which cells may contain neighbors. This isn't always 8.
 	// adjust the offset by +- half cell width in both directions then multiply by inverseCellWidth to
 	// get the minimum and maximum coords of the neighborhood
 	// half of cellWidth * inverseCellWidth is the same as (0.5,0.5,0.5)
-	//vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
-	//vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
+	//vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(0.5f, 0.5f, 0.5f); /* always checks 8 squares */
+	//vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(0.5f, 0.5f, 0.5f);
 	float dist = max(rule1_dist, rule2_dist, rule3_dist) * inverseCellWidth;
-	vec3 minv = (pos[index] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
-	vec3 maxv = (pos[index] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
+	vec3 minv = (pos[idx] - gridMin) * inverseCellWidth - vec3(dist, dist, dist); /* grid looping optimization */
+	vec3 maxv = (pos[idx] - gridMin) * inverseCellWidth + vec3(dist, dist, dist);
 	int side_max = gridResolution - 1;
 	dim3 mincoords = dim3(max(0, (int) minv.x), max(0, (int) minv.y), max(0, (int) minv.z));
 	dim3 maxcoords = dim3(min(side_max, (int) maxv.x), min(side_max, (int) maxv.y), min(side_max, (int) maxv.z));
 
-	vec3 p = pos[index];
-	vec3 v = vel1[index];
-
-	vec3 perceived_center(0.0f);
-	vec3 perceived_vel(0.0f);
-	int neighbour_count_p = 0, neighbour_count_v = 0;
-	vec3 c(0.0f);
  
 	/* when converting 3d gridpoints to 1d ints, vals across x are stored sequentially followed by y and then z
 	 * so the lookup going in the oppossite order is likely the most efficient */
@@ -523,47 +492,14 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
 				// - Access each boid in the cell and compute velocity change from
 				//   the boids rules, if this boid is within the neighborhood distance.
-				for (int b2 = start; b2 <= end; b2++) {
-					if (index == b2)
-						continue;
-					vec3 b_pos = pos[b2];
-					float len = glm::distance(b_pos, p);
-
-					if (len < rule1_dist)  {
-						perceived_center += b_pos;
-						neighbour_count_p++;
-					}
-				
-					if (len < rule2_dist)  {
-						c -= (b_pos - p);
-					}
-			
-					if (len < rule3_dist) {
-						perceived_vel += vel1[b2];
-						neighbour_count_v++;
-					}
-				}
+				for (int b2 = start; b2 <= end; b2++)
+					if (idx != b2)
+						apply_rule_effects(p, pos[b2], vel1[b2], &perceived_center, &perceived_vel, &c, &neighbour_count_p, &neighbour_count_v);
 			}
 		}
 	}
 
-	if (neighbour_count_p > 0) {
-		perceived_center /= neighbour_count_p;
-		v += (perceived_center - p) * rule1_scale;
-	}
-	v += c * rule2_scale;
-	if (neighbour_count_v > 0) {
-		perceived_vel /= neighbour_count_v;
-		v += perceived_vel * rule3_scale;
-	}
-
-	// - Clamp the speed change before putting the new speed in vel2
-	if (glm::length(v) > max_speed)
-		v = v * (max_speed / glm::length(v));
-
-	vel2[index] = v;
-
-
+	vel2[idx] = out_vel(p, v, perceived_center, perceived_vel, c, neighbour_count_p,  neighbour_count_v);
 }
 
 /**
@@ -579,8 +515,9 @@ void Boids::stepSimulationNaive(float dt)
 	kernUpdatePos<<<blocks_per_grid, block_size>>>(num_boids, dt, dv_pos.get(), dv_vel1.get());
 	checkCUDAErrorWithLine("kernUpdatePos failed!");
 
-	kernUpdateVelocityBruteForce<<<blocks_per_grid, block_size>>>(num_boids, dv_pos.get(), dv_vel1.get(), dv_vel2.get());
-	checkCUDAErrorWithLine("kernUpdateVelocityBruteForce failed!");
+	kern_update_vel_brute_force<<<blocks_per_grid, block_size>>>(num_boids, dv_pos.get(), dv_vel1.get(), dv_vel2.get());
+	checkCUDAErrorWithLine("kern_update_vel_brute_force failed!");
+
 	std::swap(dv_vel1, dv_vel2);
 }
 
